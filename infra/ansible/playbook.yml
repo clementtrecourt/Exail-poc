@@ -1,0 +1,63 @@
+---
+- name: "Déploiement DevSecOps Exail V2"
+  hosts: all
+  become: true # On agit en tant que root pour configurer la machine
+  
+  tasks:
+    - name: "Phase 1 - Sécurisation du système (Hardening)"
+      ansible.builtin.include_role:
+        name: hardening
+
+    - name: "Phase 2 - Installation de Podman"
+      ansible.builtin.apt:
+        name: podman
+        state: present
+        update_cache: true
+
+    - name: "Phase 3 - Création du compte de service applicatif"
+      ansible.builtin.user:
+        name: exail_svc
+        shell: /sbin/nologin
+        create_home: true
+
+    - name: "Phase 4 - Import des images depuis les archives tar (Air-gapped)"
+      ansible.builtin.copy:
+        src: "../vagrant/{{ item }}"
+        dest: "/tmp/{{ item }}"
+      loop:
+        - exail-backend.tar
+        - exail-frontend.tar
+
+ 
+    - name: "Phase 5 - Chargement des images (Méthode Système)"
+      ansible.builtin.command: "podman load -i /tmp/{{ item }}"
+      loop:
+        - exail-backend.tar
+        - exail-frontend.tar
+      changed_when: true
+
+    - name: "Phase 6 - Lancement du Backend C++"
+      containers.podman.podman_container:
+        name: exail-backend
+        image: "localhost/exail-backend:v2" 
+        state: started
+        pull: never
+        ports:
+          - "9090:9090"
+        cap_drop:
+          - ALL
+      register: backend_start
+      ignore_errors: true 
+
+    - name: "Phase 7 - Lancement du Frontend Vue.js"
+      containers.podman.podman_container:
+        name: exail-frontend
+        image: "localhost/exail-frontend:v2"
+        state: started
+        pull: never
+        ports:
+          - "8080:8080"
+        cap_drop:
+          - ALL
+      register: frontend_start
+      ignore_errors: true
