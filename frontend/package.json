@@ -1,0 +1,7 @@
+{
+  "name": "exail-frontend-v2",
+  "version": "2.0.0",
+  "scripts": {
+    "build": "echo 'Compilation Vue.js V2 terminée' && mkdir -p dist && echo '<h1>Supervision Drone V2 🚀</h1>' > dist/index.html"
+  }
+}
