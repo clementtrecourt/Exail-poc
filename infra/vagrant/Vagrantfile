@@ -1,26 +1,23 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
-  #Production
+
   config.vm.define "vm-prod" do |prod|
     prod.vm.hostname = "vm-prod-01"
-    prod.vm.network "private_network", ip: "192.168.56.11"
-    
-    prod.vm.provider "virtualbox" do |lv|
-      lv.name = "exail-prod-01"
-      lv.memory = "1024"
-      lv.cpus = 1
-    end
-  end
-  #Drone
-  config.vm.define "vm-drone" do |drone|
-    drone.vm.hostname = "vm-edge-drone-01"
-    drone.vm.network "private_network", ip: "192.168.56.12"
-    
-    drone.vm.provider "virtualbox" do |lv|
-      lv.name = "exail-drone-01"
-      lv.memory = "1024" 
+    prod.vm.network "private_network", ip: "192.168.121.11"
+
+    prod.vm.provider :libvirt do |lv|
+      lv.memory = 1024
       lv.cpus = 1
     end
   end
 
+  config.vm.define "vm-drone" do |drone|
+    drone.vm.hostname = "vm-edge-drone-01"
+    drone.vm.network "private_network", ip: "192.168.121.12"
+
+    drone.vm.provider :libvirt do |lv|
+      lv.memory = 1024
+      lv.cpus = 1
+    end
+  end
 end
