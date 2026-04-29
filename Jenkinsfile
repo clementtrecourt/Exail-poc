@@ -23,7 +23,7 @@ pipeline {
                     steps {
                         sh '''
                             cd frontend
-                            npm ci --prefer-offline
+                            npm install # On remplace 'npm ci' par 'npm install'
                             npm run build
                         '''
                     }
@@ -90,6 +90,10 @@ pipeline {
 
         stage('Deploy — Ansible') {
             steps {
+                sh """
+                    mkdir -p ansible/roles/podman-deploy/files/
+                    mv exail-*.tar ansible/roles/podman-deploy/files/
+                """
                 sshagent(credentials: ['jenkins-ssh-key']) {
                     sh """
                         ansible-playbook                          \
