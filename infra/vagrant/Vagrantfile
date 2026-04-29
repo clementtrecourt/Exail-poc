@@ -1,6 +1,72 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
 
+    config.vm.define "vm-jenkins" do |jenkins|
+    jenkins.vm.hostname = "vm-jenkins"
+    jenkins.vm.network "private_network", ip: "10.0.0.10",
+      libvirt__network_name: "exail-v2-net"
+ 
+    jenkins.vm.provider :libvirt do |lv|
+      lv.memory = 2048
+      lv.cpus   = 2
+    end
+ 
+    jenkins.vm.provision "shell", inline: <<-SHELL
+      set -e
+      echo "=== [1/6] Mise à jour système ==="
+      # apt-get update -qq
+ 
+      echo "=== [2/6] Installation Java 17 (requis Jenkins) ==="
+      apt-get install -y --no-install-recommends \
+        openjdk-17-jdk \
+        curl \
+        gnupg2 \
+        ca-certificates \
+        git \
+        make \
+        cmake \
+        g++
+ 
+     echo "=== [3/6] Installation Jenkins ==="
+
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key | sudo tee \
+  /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+# 5. Force update and install
+sudo apt-get update -y
+sudo apt-get install -y jenkins
+ 
+      echo "=== [4/6] Installation Podman ==="
+      apt-get install -y --no-install-recommends podman
+      usermod -aG sudo jenkins || true
+ 
+      echo "=== [5/6] Installation Ansible ==="
+      apt-get install -y --no-install-recommends \
+        ansible \
+        python3-pip
+      pip3 install --quiet ansible-lint
+      
+      ansible-galaxy collection install \
+        ansible.posix \
+        community.general \
+        containers.podman 2>/dev/null || true
+ 
+      echo "=== [6/6] Démarrage Jenkins ==="
+      systemctl enable jenkins
+      systemctl start jenkins
+ 
+      echo ""
+      echo "============================================"
+      echo "✅ Jenkins prêt sur http://10.0.0.10:8080"
+      echo "Mot de passe initial :"
+      echo "$(cat /var/lib/jenkins/secrets/initialAdminPassword 2>/dev/null || echo 'pas encore généré, attendre 30s')"
+      echo "============================================"
+    SHELL
+  end
+
+
   config.vm.define "vm-prod" do |prod|
     prod.vm.hostname = "vm-prod-01"
     prod.vm.network "private_network", ip: "10.0.0.11", libvirt__network_name: "exail-v2-net"
