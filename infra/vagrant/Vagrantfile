@@ -13,12 +13,12 @@ Vagrant.configure("2") do |config|
  
     jenkins.vm.provision "shell", inline: <<-SHELL
       set -e
-      echo "=== [1/6] Mise à jour système ==="
+      echo "=== [1/7] Mise à jour système ==="
       rm -rf /var/lib/apt/lists/*
       sudo sed -i 's|https://mirrors.edge.kernel.org/ubuntu|http://fr.archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
       apt-get update -qq
  
-      echo "=== [2/6] Installation Java 17 (requis Jenkins) ==="
+      echo "=== [2/7] Installation Java 17 (requis Jenkins) ==="
       apt-get install -y --no-install-recommends \
         openjdk-21-jdk \
         curl \
@@ -27,34 +27,57 @@ Vagrant.configure("2") do |config|
         git \
         make \
         cmake \
-        g++
+        g++ \
+        fuse-overlayfs \
+        dbus-x11
  
-     echo "=== [3/6] Installation Jenkins ==="
+     echo "=== [3/7] Installation Jenkins ==="
 
      curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key | sudo tee \
         /usr/share/keyrings/jenkins-keyring.asc > /dev/null
      echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
         https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
         /etc/apt/sources.list.d/jenkins.list > /dev/null
-     apt-get update -y
-     apt-get install -y jenkins
+     apt-get update -y -qq && apt-get install -y jenkins
  
-      echo "=== [4/6] Installation Podman ==="
+      echo "=== [4/7] Installation Podman ==="
+
+      echo "jenkins:100000:65536" > /etc/subuid
+      echo "jenkins:100000:65536" > /etc/subgid
+      
+      mkdir -p /var/lib/jenkins/.config/containers
+      cat <<EOF > /var/lib/jenkins/.config/containers/storage.conf
+[storage]
+driver = "overlay"
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+EOF
+      chown -R jenkins:jenkins /var/lib/jenkins/.config
+
+      loginctl enable-linger jenkins || true
+
       apt-get install -y --no-install-recommends podman
+
       usermod -aG sudo jenkins || true
- 
-      echo "=== [5/6] Installation Ansible ==="
+
+      echo "=== [5/7] Configuration Git Host Verification ==="
+
+      mkdir -p /var/lib/jenkins/.ssh
+
+      echo "Host *" > /var/lib/jenkins/.ssh/config
+
+      echo "    StrictHostKeyChecking no" >> /var/lib/jenkins/.ssh/config
+
+      chown -R jenkins:jenkins /var/lib/jenkins/.ssh
+      
+      echo "=== [6/7] Installation Ansible ==="
       apt-get install -y --no-install-recommends \
         ansible \
         python3-pip
       pip3 install --quiet ansible-lint
-      
-      ansible-galaxy collection install \
-        ansible.posix \
-        community.general \
-        containers.podman 2>/dev/null || true
+      sudo -u jenkins ansible-galaxy collection install ansible.posix community.general containers.podman
  
-      echo "=== [6/6] Démarrage Jenkins ==="
+      echo "=== [7/7] Démarrage Jenkins ==="
       systemctl enable jenkins
       systemctl start jenkins
  
