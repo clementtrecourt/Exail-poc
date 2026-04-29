@@ -29,7 +29,10 @@ Vagrant.configure("2") do |config|
         cmake \
         g++ \
         fuse-overlayfs \
-        dbus-x11
+        dbus-x11 \
+        nodejs \
+        uidmap \
+        npm
  
      echo "=== [3/7] Installation Jenkins ==="
 

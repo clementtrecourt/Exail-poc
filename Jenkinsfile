@@ -13,8 +13,6 @@ pipeline {
                     steps {
                         sh '''
                             mkdir -p backend/build
-                            cmake -B backend/build -S backend -DCMAKE_BUILD_TYPE=Release
-                            cmake --build backend/build --parallel $(nproc)
                         '''
                     }
                 }
@@ -23,7 +21,7 @@ pipeline {
                     steps {
                         sh '''
                             cd frontend
-                            npm install # On remplace 'npm ci' par 'npm install'
+                            npm install
                             npm run build
                         '''
                     }

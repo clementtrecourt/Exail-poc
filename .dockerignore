@@ -1,0 +1,6 @@
+backend/build/
+frontend/dist/
+frontend/node_modules/
+exail-backend.tar
+exail-frontend.tar
+.git/
