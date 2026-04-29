@@ -1,0 +1,85 @@
+---
+- name: "Podman | Installation"
+  ansible.builtin.apt:
+    name: podman
+    state: present
+    update_cache: true
+
+- name: "Sécurité | Création compte service exail_svc"
+  ansible.builtin.user:
+    name: exail_svc
+    shell: /sbin/nologin
+    create_home: true
+
+- name: "Air-Gapped | Transfert des archives .tar vers la VM"
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/tmp/{{ item }}"
+    mode: '0600'
+  loop:
+    - exail-backend.tar
+    - exail-frontend.tar
+
+- name: "Podman | Chargement image Backend"
+  ansible.builtin.command: "podman load -i /tmp/exail-backend.tar"
+  become: true
+  become_user: exail_svc
+  changed_when: true
+
+- name: "Podman | Chargement image Frontend"
+  ansible.builtin.command: "podman load -i /tmp/exail-frontend.tar"
+  become: true
+  become_user: exail_svc
+  changed_when: true
+
+- name: "Podman | Arrêt conteneurs existants"
+  ansible.builtin.command: "podman stop {{ item }}"
+  loop:
+    - exail-backend
+    - exail-frontend
+  become: true
+  become_user: exail_svc
+  ignore_errors: true 
+  changed_when: true
+
+- name: "Podman | Suppression conteneurs existants"
+  ansible.builtin.command: "podman rm {{ item }}"
+  loop:
+    - exail-backend
+    - exail-frontend
+  become: true
+  become_user: exail_svc
+  ignore_errors: true
+  changed_when: true
+
+- name: "Podman | Lancement Backend C++ (port 9090)"
+  containers.podman.podman_container:
+    name: exail-backend
+    image: "localhost/exail-backend:v{{ build_number }}"
+    state: started
+    pull: never
+    restart_policy: always
+    ports:
+      - "9090:9090"
+    cap_drop:
+      - ALL
+
+- name: "Podman | Lancement Frontend Nginx (port 8080)"
+  containers.podman.podman_container:
+    name: exail-frontend
+    image: "localhost/exail-frontend:v{{ build_number }}"
+    state: started
+    pull: never
+    restart_policy: always
+    ports:
+      - "8080:8080"
+    cap_drop:
+      - ALL
+
+- name: "Nettoyage | Suppression archives .tar de /tmp"
+  ansible.builtin.file:
+    path: "/tmp/{{ item }}"
+    state: absent
+  loop:
+    - exail-backend.tar
+    - exail-frontend.tar

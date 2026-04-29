@@ -7,20 +7,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-
-COPY . .
+COPY backend/ .
 
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 
-LABEL description="Backend C++ Exail V2 - Ultra sécurisé"
+LABEL description="Backend C++ Exail — Distroless/Nonroot, ~15MB, zéro shell"
+LABEL maintainer="DevSecOps Exail"
 
 COPY --from=builder /build/build/exail_backend /app/exail_backend
 
 EXPOSE 9090
-
 USER nonroot
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
