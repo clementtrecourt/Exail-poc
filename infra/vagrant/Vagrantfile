@@ -34,7 +34,7 @@ Vagrant.configure("2") do |config|
         uidmap \
         npm
  
-     echo "=== [3/7] Installation Jenkins ==="
+     echo "=== [3/7] Installation Jenkins et ses plugins ==="
 
      curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key | sudo tee \
         /usr/share/keyrings/jenkins-keyring.asc > /dev/null
@@ -42,7 +42,8 @@ Vagrant.configure("2") do |config|
         https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
         /etc/apt/sources.list.d/jenkins.list > /dev/null
      apt-get update -y -qq && apt-get install -y jenkins
- 
+     curl -fsSL https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.13.0/jenkins-plugin-manager-2.13.0.jar -o /opt/jenkins-plugin-manager.jar
+     java -jar /opt/jenkins-plugin-manager.jar --plugins ssh-agent workflow-aggregator git --war /usr/share/java/jenkins.war || true
       echo "=== [4/7] Installation Podman ==="
 
       echo "jenkins:100000:65536" > /etc/subuid
