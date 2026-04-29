@@ -50,22 +50,21 @@ pipeline {
 
         stage('Security Scan — Trivy') {
             steps {
-                sh """
-                    # Installation Trivy si absent
-                    if ! command -v trivy &> /dev/null; then
-                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                sh '''
+                    if [ ! -f ./trivy ]; then
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
                     fi
 
                     echo "=== Scan Backend ==="
-                    trivy image --severity HIGH,CRITICAL --no-progress ${BACKEND_IMAGE}  || true
+                    ./trivy image --severity HIGH,CRITICAL --no-progress ${BACKEND_IMAGE} || true
 
                     echo "=== Scan Frontend ==="
-                    trivy image --severity HIGH,CRITICAL --no-progress ${FRONTEND_IMAGE} || true
+                    ./trivy image --severity HIGH,CRITICAL --no-progress ${FRONTEND_IMAGE} || true
 
-                    # Export JSON pour archivage/audit
-                    trivy image --format json -o trivy-backend.json  ${BACKEND_IMAGE}  || true
-                    trivy image --format json -o trivy-frontend.json ${FRONTEND_IMAGE} || true
-                """
+                    # Export JSON
+                    ./trivy image --format json -o trivy-backend.json  ${BACKEND_IMAGE} || true
+                    ./trivy image --format json -o trivy-frontend.json ${FRONTEND_IMAGE} || true
+                '''
             }
             post {
                 always {
