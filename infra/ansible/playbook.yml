@@ -36,6 +36,20 @@
         - exail-frontend.tar
       changed_when: true
 
+    - name: "Phase 5b - Re-tagger les images correctement"
+      ansible.builtin.command: "podman tag {{ item.src }} {{ item.dest }}"
+      loop:
+        - { src: "localhost/v2:latest", dest: "localhost/exail-backend:v2" }
+      changed_when: true
+
+    - name: "Phase 5c - Identifier et tagger l'image sans tag (frontend)"
+      ansible.builtin.shell: |
+        {% raw %}
+        IMAGE_ID=$(podman images --filter dangling=true --format "{{.ID}}" | head -1)
+        podman tag "$IMAGE_ID" localhost/exail-frontend:v2
+        {% endraw %}
+      changed_when: true
+      
     - name: "Phase 6 - Lancement du Backend C++"
       containers.podman.podman_container:
         name: exail-backend
