@@ -12,7 +12,7 @@ pipeline {
                 stage('Backend — C++ / CMake') {
                     steps {
                         sh '''
-                            mkdir -p backend/build
+                            rm -rf backend/build
                         '''
                     }
                 }
@@ -32,12 +32,12 @@ pipeline {
         stage('Package — Images Podman') {
             steps {
                 sh """
-                    podman build -f Dockerfile.backend  \
+                    podman build --no-cache -f Dockerfile.backend  \
                         -t ${BACKEND_IMAGE}             \
                         --label git-commit=${GIT_COMMIT} \
                         .
 
-                    podman build -f Dockerfile.frontend \
+                    podman build --no-cache -f Dockerfile.frontend \
                         -t ${FRONTEND_IMAGE}            \
                         --label git-commit=${GIT_COMMIT} \
                         .
