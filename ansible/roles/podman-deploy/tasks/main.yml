@@ -20,61 +20,57 @@
     - exail-backend.tar
     - exail-frontend.tar
 
-- name: "Podman | Chargement image Backend"
-  ansible.builtin.command: "podman load -i /tmp/exail-backend.tar"
-  become: true
-  become_user: exail_svc
-  changed_when: true
-
-- name: "Podman | Chargement image Frontend"
-  ansible.builtin.command: "podman load -i /tmp/exail-frontend.tar"
-  become: true
-  become_user: exail_svc
-  changed_when: true
-
-- name: "Podman | Arrêt conteneurs existants"
-  ansible.builtin.command: "podman stop {{ item }}"
+- name: "Podman | Chargement images"
+  ansible.builtin.command: "podman load -i /tmp/{{ item }}"
   loop:
-    - exail-backend
-    - exail-frontend
-  become: true
-  become_user: exail_svc
-  ignore_errors: true 
+    - exail-backend.tar
+    - exail-frontend.tar
+  register: load_result
   changed_when: true
 
-- name: "Podman | Suppression conteneurs existants"
-  ansible.builtin.command: "podman rm {{ item }}"
+- debug:
+    var: load_result.results
+- name: "Re-tagger les images correctement"
+  ansible.builtin.command: "podman tag {{ item.src }} {{ item.dest }}"
   loop:
-    - exail-backend
-    - exail-frontend
-  become: true
-  become_user: exail_svc
-  ignore_errors: true
+    - { src: "localhost/v2:latest", dest: "localhost/exail-backend:v2" }
   changed_when: true
-
-- name: "Podman | Lancement Backend C++ (port 9090)"
+- name: "Tag backend image"
+  ansible.builtin.shell: |
+    IMAGE=$(echo "{{ load_result.results[0].stdout }}" | awk '{print $3}')
+    podman tag "$IMAGE" localhost/exail-backend:v2
+  changed_when: true
+- name: "Tag frontend image"
+  ansible.builtin.shell: |
+    IMAGE=$(echo "{{ load_result.results[1].stdout }}" | awk '{print $3}')
+    podman tag "$IMAGE" localhost/exail-frontend:v2
+  changed_when: true
+  
+- name: "Lancement du Backend C++"
   containers.podman.podman_container:
     name: exail-backend
-    image: "localhost/exail-backend:v{{ build_number }}"
+    image: "localhost/exail-backend:v2" 
     state: started
     pull: never
-    restart_policy: always
     ports:
       - "9090:9090"
     cap_drop:
       - ALL
+  register: backend_start
+  ignore_errors: true 
 
-- name: "Podman | Lancement Frontend Nginx (port 8080)"
+- name: "Lancement du Frontend Vue.js"
   containers.podman.podman_container:
     name: exail-frontend
-    image: "localhost/exail-frontend:v{{ build_number }}"
+    image: "localhost/exail-frontend:v2"
     state: started
     pull: never
-    restart_policy: always
     ports:
       - "8080:8080"
     cap_drop:
       - ALL
+  register: frontend_start
+  ignore_errors: true
 
 - name: "Nettoyage | Suppression archives .tar de /tmp"
   ansible.builtin.file:
