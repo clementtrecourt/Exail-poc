@@ -4,12 +4,14 @@
     name: podman
     state: present
     update_cache: true
+  become: true
 
 - name: "Sécurité | Création compte service exail_svc"
   ansible.builtin.user:
     name: exail_svc
     shell: /sbin/nologin
     create_home: true
+  become: true 
 
 - name: "Air-Gapped | Transfert des archives .tar vers la VM"
   ansible.builtin.copy:
