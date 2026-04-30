@@ -36,7 +36,6 @@
     name: exail-backend
     image: "localhost/exail-backend:v2" 
     state: started
-    pull: never
     ports:
       - "9090:9090"
     cap_drop:
@@ -49,7 +48,6 @@
     name: exail-frontend
     image: "localhost/exail-frontend:v2"
     state: started
-    pull: never
     ports:
       - "8080:8080"
     cap_drop:
