@@ -30,21 +30,6 @@
 
 - debug:
     var: load_result.results
-- name: "Re-tagger les images correctement"
-  ansible.builtin.command: "podman tag {{ item.src }} {{ item.dest }}"
-  loop:
-    - { src: "localhost/v2:latest", dest: "localhost/exail-backend:v2" }
-  changed_when: true
-- name: "Tag backend image"
-  ansible.builtin.shell: |
-    IMAGE=$(echo "{{ load_result.results[0].stdout }}" | awk '{print $3}')
-    podman tag "$IMAGE" localhost/exail-backend:v2
-  changed_when: true
-- name: "Tag frontend image"
-  ansible.builtin.shell: |
-    IMAGE=$(echo "{{ load_result.results[1].stdout }}" | awk '{print $3}')
-    podman tag "$IMAGE" localhost/exail-frontend:v2
-  changed_when: true
   
 - name: "Lancement du Backend C++"
   containers.podman.podman_container:
