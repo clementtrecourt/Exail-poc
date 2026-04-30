@@ -30,29 +30,37 @@
 
 - debug:
     var: load_result.results
-  
+
+- name: "Récupérer le tag du backend chargé"
+  ansible.builtin.shell: podman images --format "{{ '{{' }}.Repository}}:{{ '{{' }}.Tag}}" | grep exail-backend | head -1
+  register: backend_image_tag
+  changed_when: false
+
+- name: "Récupérer le tag du frontend chargé"
+  ansible.builtin.shell: podman images --format "{{ '{{' }}.Repository}}:{{ '{{' }}.Tag}}" | grep exail-frontend | head -1
+  register: frontend_image_tag
+  changed_when: false
+
+
 - name: "Lancement du Backend C++"
-  containers.podman.podman_container:
-    name: exail-backend
-    image: "localhost/exail-backend:v2" 
-    state: started
-    ports:
-      - "9090:9090"
-    cap_drop:
-      - ALL
-  register: backend_start
-  ignore_errors: true 
+  ansible.builtin.shell: |
+    podman rm -f exail-backend 2>/dev/null || true
+    podman run -d \
+      --name exail-backend \
+      --cap-drop ALL \
+      -p 9090:9090 \
+      {{ backend_image_tag.stdout }}
+  changed_when: true
 
 - name: "Lancement du Frontend Vue.js"
-  containers.podman.podman_container:
-    name: exail-frontend
-    image: "localhost/exail-frontend:v2"
-    state: started
-    ports:
-      - "8080:8080"
-    cap_drop:
-      - ALL
-  register: frontend_start
+  ansible.builtin.shell: |
+    podman rm -f exail-frontend 2>/dev/null || true
+    podman run -d \
+      --name exail-frontend \
+      --cap-drop ALL \
+      -p 8080:8080 \
+      {{ frontend_image_tag.stdout }}
+  changed_when: true
   ignore_errors: true
 
 - name: "Nettoyage | Suppression archives .tar de /tmp"
