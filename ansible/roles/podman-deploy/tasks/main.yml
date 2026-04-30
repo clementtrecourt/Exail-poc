@@ -46,6 +46,7 @@
 
 - name: "Lancement du Backend C++"
   ansible.builtin.shell: |
+    sudo podman rm -f exail-backend 2>/dev/null || true
     podman rm -f exail-backend 2>/dev/null || true
     podman run -d \
       --name exail-backend \
@@ -54,11 +55,10 @@
       {{ backend_image_tag.stdout }}
   register: backend_run
   changed_when: true
-- name: "Debug backend run"
-  debug:
-    var: backend_run
+
 - name: "Lancement du Frontend Vue.js"
   ansible.builtin.shell: |
+    sudo podman rm -f exail-frontend 2>/dev/null || true
     podman rm -f exail-frontend 2>/dev/null || true
     podman run -d \
       --name exail-frontend \
@@ -66,7 +66,6 @@
       -p 8080:8080 \
       {{ frontend_image_tag.stdout }}
   changed_when: true
-  ignore_errors: true
 
 - name: "Nettoyage | Suppression archives .tar de /tmp"
   ansible.builtin.file:
