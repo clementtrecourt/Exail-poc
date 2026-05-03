@@ -48,31 +48,6 @@ pipeline {
             }
         }
 
-        stage('Security Scan — Trivy') {
-            steps {
-                sh '''
-                    if [ ! -f ./trivy ]; then
-                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
-                    fi
-
-                    echo "=== Scan Backend ==="
-                    ./trivy image --severity HIGH,CRITICAL --no-progress ${BACKEND_IMAGE}
-
-                    echo "=== Scan Frontend ==="
-                    ./trivy image --severity HIGH,CRITICAL --no-progress ${FRONTEND_IMAGE}
-
-                    # Export JSON
-                    ./trivy image --format json -o trivy-backend.json  ${BACKEND_IMAGE}
-                    ./trivy image --format json -o trivy-frontend.json ${FRONTEND_IMAGE}
-                '''
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'trivy-*.json', allowEmptyArchive: true
-                }
-            }
-        }
-
         stage('Export — Archives Air-Gapped') {
             steps {
                 sh """
@@ -84,6 +59,33 @@ pipeline {
                 archiveArtifacts artifacts: 'exail-*.tar'
             }
         }
+
+        stage('Security Scan — Trivy') {
+            steps {
+                sh '''
+                    if [ ! -f ./trivy ]; then
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
+                    fi
+
+                    echo "=== Scan Backend ==="
+                    ./trivy image --input exail-backend.tar --severity HIGH,CRITICAL --no-progress
+
+                    echo "=== Scan Frontend ==="
+                    ./trivy image --input exail-frontend.tar --severity HIGH,CRITICAL --no-progress
+
+                    # Export JSON
+                    ./trivy image --input exail-backend.tar --format json -o trivy-backend.json
+                    ./trivy image --input exail-frontend.tar --format json -o trivy-frontend.json
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-*.json', allowEmptyArchive: true
+                }
+            }
+        }
+
+       
 
         stage('Deploy — Ansible') {
             steps {
