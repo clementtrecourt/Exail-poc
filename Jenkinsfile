@@ -56,14 +56,14 @@ pipeline {
                     fi
 
                     echo "=== Scan Backend ==="
-                    ./trivy image --severity HIGH,CRITICAL --no-progress ${BACKEND_IMAGE} || true
+                    ./trivy image --severity HIGH,CRITICAL --no-progress ${BACKEND_IMAGE}
 
                     echo "=== Scan Frontend ==="
-                    ./trivy image --severity HIGH,CRITICAL --no-progress ${FRONTEND_IMAGE} || true
+                    ./trivy image --severity HIGH,CRITICAL --no-progress ${FRONTEND_IMAGE}
 
                     # Export JSON
-                    ./trivy image --format json -o trivy-backend.json  ${BACKEND_IMAGE} || true
-                    ./trivy image --format json -o trivy-frontend.json ${FRONTEND_IMAGE} || true
+                    ./trivy image --format json -o trivy-backend.json  ${BACKEND_IMAGE}
+                    ./trivy image --format json -o trivy-frontend.json ${FRONTEND_IMAGE}
                 '''
             }
             post {
