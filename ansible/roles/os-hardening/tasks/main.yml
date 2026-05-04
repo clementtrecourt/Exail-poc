@@ -49,13 +49,13 @@
 - name: "ANSSI | UFW | Ouverture port Backend C++ (9090)"
   community.general.ufw:
     rule: allow
-    port: "9090"
+    port: "{{ ufw_backend_port | string }}"
     proto: tcp
 
 - name: "ANSSI | UFW | Ouverture port Frontend Nginx (8080)"
   community.general.ufw:
     rule: allow
-    port: "8080"
+    port: "{{ ufw_frontend_port | string }}"
     proto: tcp
 
 - name: "ANSSI | UFW | Activation"
@@ -65,10 +65,5 @@
 - name: "ANSSI | Bannière | Avertissement légal Défense"
   ansible.builtin.copy:
     dest: /etc/issue.net
-    content: |
-      ===========================================================
-      ⚠️  SYSTÈME D'INFORMATION RESTREINT — EXAIL
-      Accès réservé aux personnels habilités.
-      Toute intrusion est traçable et pénalement répréhensible.
-      ===========================================================
+    content: "{{ ssh_banner_text }}"
     mode: '0644'

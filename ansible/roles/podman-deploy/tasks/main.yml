@@ -6,9 +6,9 @@
     update_cache: true
   become: true
 
-- name: "Sécurité | Création compte service exail_svc"
+- name: "Sécurité | Création compte service"
   ansible.builtin.user:
-    name: exail_svc
+    name: "{{ podman_service_user }}"
     shell: /sbin/nologin
     create_home: true
   become: true 
@@ -16,7 +16,7 @@
 - name: "Air-Gapped | Transfert des archives .tar vers la VM"
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: "/tmp/{{ item }}"
+    dest: "{{ podman_transfer_dir }}/{{ item }}"
     mode: '0600'
   loop:
     - exail-backend.tar
@@ -51,7 +51,7 @@
     podman run -d \
       --name exail-backend \
       --cap-drop ALL \
-      -p 9090:9090 \
+      -p {{ ufw_backend_port }}:{{ container_backend_port }} \
       {{ backend_image_tag.stdout }}
   register: backend_run
   changed_when: true
@@ -63,7 +63,7 @@
     podman run -d \
       --name exail-frontend \
       --cap-drop ALL \
-      -p 8080:8080 \
+      -p {{ ufw_frontend_port }}:{{ container_frontend_port }} \
       {{ frontend_image_tag.stdout }}
   changed_when: true
 
