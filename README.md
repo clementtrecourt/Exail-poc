@@ -21,7 +21,37 @@ Code (GitHub) → Jenkins → Build C++/npm → Podman build → Trivy scan
 ```
 
 ---
+```mermaid
+flowchart LR
+    subgraph DEV["Dev machine"]
+        GH["GitHub\ncode source"]
+    end
 
+    subgraph JENKINS["vm-jenkins — 192.168.56.10"]
+        direction TB
+        BUILD["Build\nC++ CMake + npm"]
+        PKG["Package\nPodman build + labels"]
+        SCAN["Security scan\nTrivy — CVE HIGH/CRIT"]
+        EXPORT["Export air-gapped\npodman save → .tar"]
+        DEPLOY["Deploy Ansible\nHardening + podman run"]
+        HEALTH["Health check\nGET /health + status"]
+
+        BUILD --> PKG
+        PKG --> SCAN
+        SCAN --> EXPORT
+        EXPORT --> DEPLOY
+        DEPLOY --> HEALTH
+    end
+
+    subgraph CIBLES["VMs cibles — réseau 192.168.56.0/24"]
+        PROD["vm-prod .56.11\nVue.js :8080"]
+        DRONE["vm-drone .56.12\nC++ API :9090"]
+    end
+
+    GH -->|git push| BUILD
+    HEALTH -->|SSH Ansible| PROD
+    HEALTH -->|SSH Ansible| DRONE
+```
 ## Prérequis
 
 - [Vagrant](https://www.vagrantup.com/) + plugin libvirt
