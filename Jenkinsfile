@@ -68,10 +68,10 @@ pipeline {
                     fi
 
                     echo "=== Scan Backend ==="
-                    ./trivy image --input exail-backend.tar --severity HIGH,CRITICAL --no-progress
+                    ./trivy image --exit-code-1 --input exail-backend.tar --severity HIGH,CRITICAL --no-progress
 
                     echo "=== Scan Frontend ==="
-                    ./trivy image --input exail-frontend.tar --severity HIGH,CRITICAL --no-progress
+                    ./trivy image --exit-code-1 --input exail-frontend.tar --severity HIGH,CRITICAL --no-progress
 
                     # Export JSON
                     ./trivy image --input exail-backend.tar --format json -o trivy-backend.json
