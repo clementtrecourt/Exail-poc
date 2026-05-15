@@ -79,7 +79,10 @@ EOF
         python3-pip
       pip3 install --quiet ansible-lint
       sudo -u jenkins ansible-galaxy collection install ansible.posix community.general containers.podman
- 
+
+      echo "=== [6.5/7] Installation Syft (SBOM) ==="
+      curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      
       echo "=== [7/7] Démarrage Jenkins ==="
       systemctl enable jenkins
       systemctl start jenkins
