@@ -96,6 +96,7 @@ pipeline {
                 """
                 sshagent(credentials: ['jenkins-ssh-key']) {
                     sh """
+                        export ANSIBLE_CONFIG=ansible.cfg       
                         ansible-playbook                          \
                             -i ansible/inventory/production.ini   \
                             ansible/deploy-app.yml                \

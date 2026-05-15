@@ -1,0 +1,20 @@
+ansible_ssh_user: vagrant
+ssh_port: 22
+ufw_frontend_port: 8080
+ufw_backend_port: 9090
+hardening_disable_root: true
+hardening_disable_passwords: true
+apply_anssi_sysctl: true
+ssh_banner_text: '===========================================================
+
+  ⚠️ SYSTÈME D''INFORMATION RESTREINT — EXAIL
+
+  Accès réservé aux personnels habilités.
+
+  Toute intrusion est traçable et pénalement répréhensible.
+
+  ==========================================================='
+podman_service_user: exail_svc
+podman_transfer_dir: /tmp
+container_frontend_port: 8080
+container_backend_port: 9090
