@@ -51,6 +51,7 @@ pipeline {
         stage('Export — Archives Air-Gapped') {
             steps {
                 sh """
+                    rm -f exail-backend.tar exail-frontend.tar
                     podman save --format docker-archive -o exail-backend.tar  ${BACKEND_IMAGE}
                     podman save --format docker-archive -o exail-frontend.tar ${FRONTEND_IMAGE}
                     echo "=== Archives générées ==="
