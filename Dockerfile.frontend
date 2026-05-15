@@ -1,10 +1,10 @@
-FROM node:20-alpine AS builder
+FROM docker.io/library/node:20-alpine AS builder
 
 WORKDIR /app
 COPY frontend/ .
 RUN npm run build
 
-FROM nginx:stable-alpine
+FROM docker.io/nginx:stable-alpine
 
 LABEL description="Frontend Vue.js Exail — Nginx Rootless, ~50MB, zéro Node.js"
 LABEL maintainer="DevSecOps Exail"
