@@ -4,10 +4,12 @@ WORKDIR /app
 COPY frontend/ .
 RUN npm run build
 
-FROM docker.io/library/nginx:1.27-alpine
+FROM nginx:stable-alpine
 
 LABEL description="Frontend Vue.js Exail — Nginx Rootless, ~50MB, zéro Node.js"
 LABEL maintainer="DevSecOps Exail"
+
+RUN apk upgrade --no-cache
 
 COPY frontend/nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
