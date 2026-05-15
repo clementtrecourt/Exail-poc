@@ -82,7 +82,7 @@ EOF
 
       echo "=== [6.5/7] Installation Syft (SBOM) ==="
       curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-      
+
       echo "=== [7/7] Démarrage Jenkins ==="
       systemctl enable jenkins
       systemctl start jenkins
@@ -121,6 +121,15 @@ SHELL
     drone.vm.network "private_network", ip: "10.0.0.12", libvirt__network_name: "exail-v2-net"
     
     drone.vm.provider :libvirt do |lv|
+      lv.memory = 1024
+      lv.cpus = 1
+    end
+  end
+  config.vm.define "vm-monitoring" do |mon|
+    mon.vm.hostname = "vm-monitoring"
+    mon.vm.network "private_network", ip: "10.0.0.13", libvirt__network_name: "exail-v2-net"
+    
+    mon.vm.provider :libvirt do |lv|
       lv.memory = 1024
       lv.cpus = 1
     end
