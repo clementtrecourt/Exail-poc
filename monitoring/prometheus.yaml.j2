@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets:
+        - "{{ hostvars['vm-prod-01'].ansible_host }}:9100"
+        - "{{ hostvars['vm-edge-drone-01'].ansible_host }}:9100"
+  
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets:
+        - "{{ hostvars['vm-prod-01'].ansible_host }}:8080"
+        - "{{ hostvars['vm-edge-drone-01'].ansible_host }}:8080"
