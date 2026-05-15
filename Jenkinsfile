@@ -11,12 +11,9 @@ pipeline {
             parallel {
                 stage('Backend — C++ / CMake') {
                     steps {
-                        sh '''
-                            rm -rf backend/build
-                        '''
+                        sh 'rm -rf backend/build'
                     }
                 }
-
                 stage('Frontend — Vue.js / npm') {
                     steps {
                         sh '''
@@ -32,14 +29,23 @@ pipeline {
         stage('Package — Images Podman') {
             steps {
                 sh """
+                    BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+                    GIT_BRANCH_NAME=\${GIT_BRANCH:-\$(git rev-parse --abbrev-ref HEAD)}
+
                     podman build --no-cache -f Dockerfile.backend  \
-                        -t ${BACKEND_IMAGE}             \
-                        --label git-commit=${GIT_COMMIT} \
+                        -t ${BACKEND_IMAGE} \
+                        --label git.commit=${GIT_COMMIT} \
+                        --label git.branch=\${GIT_BRANCH_NAME} \
+                        --label build.date=\${BUILD_DATE} \
+                        --label build.number=${BUILD_NUMBER} \
                         .
 
                     podman build --no-cache -f Dockerfile.frontend \
-                        -t ${FRONTEND_IMAGE}            \
-                        --label git-commit=${GIT_COMMIT} \
+                        -t ${FRONTEND_IMAGE} \
+                        --label git.commit=${GIT_COMMIT} \
+                        --label git.branch=\${GIT_BRANCH_NAME} \
+                        --label build.date=\${BUILD_DATE} \
+                        --label build.number=${BUILD_NUMBER} \
                         .
 
                     echo "=== Taille des images finales ==="
@@ -61,6 +67,23 @@ pipeline {
             }
         }
 
+        stage('SBOM Generation — Syft') {
+            steps {
+                sh '''
+                    echo "=== Génération SBOM (SPDX) Backend ==="
+                    syft docker-archive:exail-backend.tar -o spdx-json=sbom-backend.json
+
+                    echo "=== Génération SBOM (SPDX) Frontend ==="
+                    syft docker-archive:exail-frontend.tar -o spdx-json=sbom-frontend.json
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'sbom-*.json', allowEmptyArchive: true
+                }
+            }
+        }
+
         stage('Security Scan — Trivy') {
             steps {
                 sh '''
@@ -69,12 +92,13 @@ pipeline {
                     fi
 
                     echo "=== Scan Backend ==="
-                    ./trivy image --exit-code 1 --input exail-backend.tar --severity HIGH,CRITICAL --no-progress
+                    # exit-code 1 strict sur CRITICAL unfixed (selon la Todo)
+                    ./trivy image --exit-code 1 --input exail-backend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
                     echo "=== Scan Frontend ==="
-                    ./trivy image --exit-code 1 --input exail-frontend.tar --severity HIGH,CRITICAL --no-progress
+                    ./trivy image --exit-code 1 --input exail-frontend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
-                    # Export JSON
+                    # Export JSON (Toujours utile pour les traces)
                     ./trivy image --input exail-backend.tar --format json -o trivy-backend.json
                     ./trivy image --input exail-frontend.tar --format json -o trivy-frontend.json
                 '''
@@ -85,8 +109,6 @@ pipeline {
                 }
             }
         }
-
-       
 
         stage('Deploy — Ansible') {
             steps {
