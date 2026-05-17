@@ -17,7 +17,7 @@
 
     - name: "Génération prometheus.yml"
       ansible.builtin.template:
-        src: "prometheus.yml.j2"
+        src: "prometheus.yaml.j2"
         dest: "/etc/monitoring/prometheus.yml"
 
     - name: "Démarrage Stack Centrale"
@@ -33,7 +33,7 @@
   block:
     - name: "Génération promtail-config.yml"
       ansible.builtin.template:
-        src: "monitoring/promtail-config.yml.j2"
+        src: "monitoring/promtail-config.yaml.j2"
         dest: "/etc/promtail-config.yml"
 
     - name: "Démarrage Agents Collecte"
