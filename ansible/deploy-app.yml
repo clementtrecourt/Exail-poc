@@ -10,3 +10,9 @@
   become: false
   roles:
     - podman-deploy
+
+- name: "DevSecOps Exail — Observabilité (Stack Monitoring)"
+  hosts: all
+  become: true
+  roles:
+    - observability

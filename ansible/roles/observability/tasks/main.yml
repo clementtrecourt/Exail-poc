@@ -1,0 +1,47 @@
+---
+- name: "Observability | Ensure Podman is installed"
+  ansible.builtin.apt:
+    name: podman
+    state: present
+    update_cache: true
+  become: true
+
+- name: "DÉPLOIEMENT SERVER (Grafana, Prometheus, Loki)"
+  when: "'monitoring' in group_names"
+  become: true
+  block:
+    - name: "Création dossier config"
+      ansible.builtin.file:
+        path: "/etc/monitoring"
+        state: directory
+
+    - name: "Génération prometheus.yml"
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../monitoring/prometheus.yml.j2"
+        dest: "/etc/monitoring/prometheus.yml"
+
+    - name: "Démarrage Stack Centrale"
+      ansible.builtin.shell: |
+        podman rm -f prometheus loki grafana 2>/dev/null || true
+        podman run -d --name loki -p 3100:3100 docker.io/grafana/loki:latest
+        podman run -d --name prometheus -p 9090:9090 -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro docker.io/prom/prometheus:latest
+        podman run -d --name grafana -p 3000:3000 docker.io/grafana/grafana:latest
+
+- name: "DÉPLOIEMENT AGENTS (Node Exporter, cAdvisor, Promtail)"
+  when: "'monitoring' not in group_names"
+  become: true
+  block:
+    - name: "Génération promtail-config.yml"
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../monitoring/promtail-config.yml.j2"
+        dest: "/etc/promtail-config.yml"
+
+    - name: "Démarrage Agents Collecte"
+      ansible.builtin.shell: |
+        podman rm -f node_exporter cadvisor promtail 2>/dev/null || true
+        
+        podman run -d --name node_exporter --net="host" --pid="host" -v "/:/host:ro,rslave" docker.io/prom/node-exporter:latest --path.rootfs=/host
+        
+        podman run -d --name cadvisor -p 8080:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/containers:/var/lib/containers:ro docker.io/google/cadvisor:latest
+        
+        podman run -d --name promtail -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro -v /etc/machine-id:/etc/machine-id:ro -v /etc/promtail-config.yml:/etc/promtail/config.yml:ro docker.io/grafana/promtail:latest -config.file=/etc/promtail/config.yml
