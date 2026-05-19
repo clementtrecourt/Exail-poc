@@ -118,7 +118,7 @@ pipeline {
                 """
                 sshagent(credentials: ['jenkins-ssh-key']) {
                     sh """
-                        export ANSIBLE_CONFIG=ansible.cfg       
+                        export ANSIBLE_CONFIG=ansible.cfg
                         ansible-playbook                          \
                             -i ansible/inventory/production.ini   \
                             ansible/deploy-app.yml                \
@@ -130,22 +130,23 @@ pipeline {
         }
 
         stage('Health Check') {
-            steps {
-                sshagent(credentials: ['jenkins-ssh-key']) {
-                    sh '''
-                        ansible all                                  \
-                            -i ansible/inventory/production.ini      \
-                            -m uri                                    \
-                            -a "url=http://localhost:8080/health"
+                    steps {
+                        sshagent(credentials: ['jenkins-ssh-key']) {
+                            sh '''
+                                # On cible uniquement les groupes production et edge (pas le monitoring)
+                                ansible 'production,edge'                    \
+                                    -i ansible/inventory/production.ini      \
+                                    -m uri                                    \
+                                    -a "url=http://localhost:8080/health"
 
-                        ansible all                                  \
-                            -i ansible/inventory/production.ini      \
-                            -m command                               \
-                            -a "podman exec exail-backend /app/exail_backend --health-check"
-                    '''
+                                ansible 'production,edge'                    \
+                                    -i ansible/inventory/production.ini      \
+                                    -m command                               \
+                                    -a "podman exec exail-backend /app/exail_backend --health-check"
+                            '''
+                        }
+                    }
                 }
-            }
-        }
     }
 
     post {
