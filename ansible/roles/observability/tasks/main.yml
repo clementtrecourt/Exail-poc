@@ -33,9 +33,9 @@
     - name: "Démarrage Stack Centrale"
       ansible.builtin.shell: |
         podman rm -f prometheus loki grafana 2>/dev/null || true
-        podman run -d --name loki -p 3100:3100 docker.io/grafana/loki:latest
-        podman run -d --name prometheus -p 9090:9090 -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro docker.io/prom/prometheus:latest
-        podman run -d --name grafana -p 3000:3000 docker.io/grafana/grafana:latest
+        podman run -d --name loki -p 3100:3100 -v loki_data:/loki docker.io/grafana/loki:latest
+        podman run -d --name prometheus -p 9090:9090 -v prometheus_data:/prometheus -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro docker.io/prom/prometheus:latest
+        podman run -d --name grafana -p 3000:3000 -v grafana_data:/var/lib/grafana docker.io/grafana/grafana:latest
 
 - name: "DÉPLOIEMENT AGENTS (Node Exporter, cAdvisor, Promtail)"
   when: "'monitoring' not in group_names"
