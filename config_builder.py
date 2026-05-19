@@ -367,7 +367,6 @@ with tab0:
             "ports": [
                 (22, "SSH"),
                 (8080, "Frontend"),
-                (9100, "node-exporter"),
                 (8081, "cAdvisor"),
             ],
         },
@@ -378,7 +377,6 @@ with tab0:
             "ports": [
                 (22, "SSH"),
                 (9090, "Backend"),
-                (9100, "node-exporter"),
                 (8081, "cAdvisor"),
             ],
         },
