@@ -1,4 +1,3 @@
----
 - name: "Observability | Ensure Podman is installed"
   ansible.builtin.apt:
     name: podman
@@ -33,9 +32,19 @@
     - name: "Démarrage Stack Centrale"
       ansible.builtin.shell: |
         podman rm -f prometheus loki grafana 2>/dev/null || true
-        podman run -d --name loki -p 3100:3100 -v loki_data:/loki docker.io/grafana/loki:latest
-        podman run -d --name prometheus -p 9090:9090 -v prometheus_data:/prometheus -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro docker.io/prom/prometheus:latest
-        podman run -d --name grafana -p 3000:3000 -v grafana_data:/var/lib/grafana docker.io/grafana/grafana:latest
+        podman run -d --name loki \
+          -p 3100:3100 \
+          -v loki_data:/loki \
+          docker.io/grafana/loki:latest
+        podman run -d --name prometheus \
+          --network=host \
+          -v prometheus_data:/prometheus \
+          -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro \
+          docker.io/prom/prometheus:latest
+        podman run -d --name grafana \
+          -p 3000:3000 \
+          -v grafana_data:/var/lib/grafana \
+          docker.io/grafana/grafana:latest
 
 - name: "DÉPLOIEMENT AGENTS (Node Exporter, cAdvisor, Promtail)"
   when: "'monitoring' not in group_names"
@@ -58,20 +67,29 @@
     - name: "Démarrage Agents Collecte"
       ansible.builtin.shell: |
         podman rm -f node_exporter cadvisor promtail 2>/dev/null || true
-
-        podman run -d --name node_exporter --net="host" --pid="host" -v "/:/host:ro,rslave" docker.io/prom/node-exporter:latest --path.rootfs=/host
-
-         podman run -d --name cadvisor \
-                   --privileged \
-                   --device /dev/kmsg \
-                   -p 8081:8080 \
-                   -v /:/rootfs:ro \
-                   -v /var/run:/var/run:ro \
-                   -v /sys:/sys:ro \
-                   -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
-                   -v /var/lib/containers:/var/lib/containers:ro \
-                   gcr.io/cadvisor/cadvisor:v0.47.2 \
-                   --docker_only=false \
-                   --raw_cgroup_prefix_whitelist=/
-
-        podman run -d --name promtail -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro -v /etc/machine-id:/etc/machine-id:ro -v /etc/promtail-config.yml:/etc/promtail/config.yml:ro docker.io/grafana/promtail:latest -config.file=/etc/promtail/config.yml
+        podman run -d --name node_exporter \
+          --network=host \
+          --pid=host \
+          -v /:/host:ro,rslave \
+          docker.io/prom/node-exporter:latest \
+          --path.rootfs=/host
+        podman run -d --name cadvisor \
+          --privileged \
+          --network=host \
+          --device /dev/kmsg \
+          -v /:/rootfs:ro \
+          -v /var/run:/var/run:ro \
+          -v /sys:/sys:ro \
+          -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+          -v /var/lib/containers:/var/lib/containers:ro \
+          gcr.io/cadvisor/cadvisor:v0.47.2 \
+          --docker_only=false \
+          --raw_cgroup_prefix_whitelist=/ \
+          --port=8081
+        podman run -d --name promtail \
+          -v /var/log/journal:/var/log/journal:ro \
+          -v /run/log/journal:/run/log/journal:ro \
+          -v /etc/machine-id:/etc/machine-id:ro \
+          -v /etc/promtail-config.yml:/etc/promtail/config.yml:ro \
+          docker.io/grafana/promtail:latest \
+          -config.file=/etc/promtail/config.yml
