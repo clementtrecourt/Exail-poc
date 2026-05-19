@@ -1,12 +1,12 @@
 ---
 - name: "DevSecOps Exail — Hardening OS"
-  hosts: all
+  hosts: all:!monitoring
   become: true
   roles:
     - os-hardening
 
 - name: "DevSecOps Exail — Déploiement Applicatif (Air-Gapped)"
-  hosts: all
+  hosts: all:!monitoring
   become: false
   roles:
     - podman-deploy
