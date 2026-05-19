@@ -4,9 +4,11 @@
     name: podman
     state: present
     update_cache: true
+  become: true
 
 - name: "DÉPLOIEMENT SERVER (Grafana, Prometheus, Loki)"
   when: "'monitoring' in group_names"
+  become: true
   block:
     - name: "UFW | Ouverture ports Serveur Monitoring"
       community.general.ufw:
@@ -29,7 +31,6 @@
         dest: "/etc/monitoring/prometheus.yml"
 
     - name: "Démarrage Stack Centrale"
-      become: false
       ansible.builtin.shell: |
         podman rm -f prometheus loki grafana 2>/dev/null || true
         podman run -d --name loki -p 3100:3100 docker.io/grafana/loki:latest
@@ -38,6 +39,7 @@
 
 - name: "DÉPLOIEMENT AGENTS (Node Exporter, cAdvisor, Promtail)"
   when: "'monitoring' not in group_names"
+  become: true
   block:
     - name: "UFW | Ouverture ports Agents Collecte"
       community.general.ufw:
@@ -54,12 +56,11 @@
         dest: "/etc/promtail-config.yml"
 
     - name: "Démarrage Agents Collecte"
-      become: false
       ansible.builtin.shell: |
         podman rm -f node_exporter cadvisor promtail 2>/dev/null || true
-        
+
         podman run -d --name node_exporter --net="host" --pid="host" -v "/:/host:ro,rslave" docker.io/prom/node-exporter:latest --path.rootfs=/host
-        
+
         podman run -d --name cadvisor -p 8081:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/containers:/var/lib/containers:ro docker.io/google/cadvisor:latest
-        
+
         podman run -d --name promtail -v /var/log/journal:/var/log/journal:ro -v /run/log/journal:/run/log/journal:ro -v /etc/machine-id:/etc/machine-id:ro -v /etc/promtail-config.yml:/etc/promtail/config.yml:ro docker.io/grafana/promtail:latest -config.file=/etc/promtail/config.yml
