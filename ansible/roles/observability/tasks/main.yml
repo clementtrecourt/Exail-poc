@@ -1,3 +1,4 @@
+---
 - name: "Observability | Ensure Podman is installed"
   ansible.builtin.apt:
     name: podman
@@ -23,6 +24,7 @@
       ansible.builtin.file:
         path: "/etc/monitoring"
         state: directory
+        mode: "0755"
 
     - name: "Génération prometheus.yml"
       ansible.builtin.template:
@@ -45,6 +47,7 @@
           -p 3000:3000 \
           -v grafana_data:/var/lib/grafana \
           docker.io/grafana/grafana:latest
+      changed_when: true
 
 - name: "DÉPLOIEMENT AGENTS (Node Exporter, cAdvisor, Promtail)"
   when: "'monitoring' not in group_names"
@@ -59,20 +62,32 @@
         - "9100"
         - "8081"
 
+    - name: "UFW | Ouverture port podman-exporter"
+      community.general.ufw:
+        rule: allow
+        port: "9882"
+        proto: tcp
+      when: enable_podman_exporter | default(true) | bool
+
     - name: "Génération promtail-config.yml"
       ansible.builtin.template:
         src: "promtail-config.yaml.j2"
         dest: "/etc/promtail-config.yml"
 
-    - name: "Démarrage Agents Collecte"
+    - name: "Démarrage Node Exporter"
       ansible.builtin.shell: |
-        podman rm -f node_exporter cadvisor promtail 2>/dev/null || true
+        podman rm -f node_exporter 2>/dev/null || true
         podman run -d --name node_exporter \
           --network=host \
           --pid=host \
           -v /:/host:ro,rslave \
           docker.io/prom/node-exporter:latest \
           --path.rootfs=/host
+      changed_when: true
+
+    - name: "Démarrage cAdvisor"
+      ansible.builtin.shell: |
+        podman rm -f cadvisor 2>/dev/null || true
         podman run -d --name cadvisor \
           --privileged \
           --network=host \
@@ -86,6 +101,23 @@
           --docker_only=false \
           --raw_cgroup_prefix_whitelist=/ \
           --port=8081
+      changed_when: true
+      when: enable_cadvisor | default(true) | bool
+
+    - name: "Démarrage podman-exporter"
+      ansible.builtin.shell: |
+        podman rm -f podman-exporter 2>/dev/null || true
+        podman run -d --name podman-exporter \
+          --security-opt label=disable \
+          --network=host \
+          -v /run/podman/podman.sock:/run/podman/podman.sock:ro \
+          quay.io/navidys/prometheus-podman-exporter:latest
+      changed_when: true
+      when: enable_podman_exporter | default(true) | bool
+
+    - name: "Démarrage Promtail"
+      ansible.builtin.shell: |
+        podman rm -f promtail 2>/dev/null || true
         podman run -d --name promtail \
           -v /var/log/journal:/var/log/journal:ro \
           -v /run/log/journal:/run/log/journal:ro \
@@ -93,3 +125,4 @@
           -v /etc/promtail-config.yml:/etc/promtail/config.yml:ro \
           docker.io/grafana/promtail:latest \
           -config.file=/etc/promtail/config.yml
+      changed_when: true
