@@ -11,24 +11,29 @@
     name: "{{ podman_service_user }}"
     shell: /sbin/nologin
     create_home: true
-  become: true 
+  become: true
 
 - name: "Air-Gapped | Transfert des archives .tar vers la VM"
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ podman_transfer_dir }}/{{ item }}"
-    mode: '0600'
+    mode: "0600"
+    owner: "{{ podman_service_user }}"
+    group: "{{ podman_service_user }}"
   loop:
     - exail-backend.tar
     - exail-frontend.tar
+  become: true
 
-- name: "Podman | Chargement images"
-  ansible.builtin.command: "podman load -i /tmp/{{ item }}"
+- name: "Podman | Chargement images (en tant que {{ podman_service_user }})"
+  ansible.builtin.command: "podman load -i {{ podman_transfer_dir }}/{{ item }}"
   loop:
     - exail-backend.tar
     - exail-frontend.tar
   register: load_result
   changed_when: true
+  become: true
+  become_user: "{{ podman_service_user }}"
 
 - debug:
     var: load_result.results
@@ -37,16 +42,18 @@
   ansible.builtin.shell: podman images --format "{{ '{{' }}.Repository}}:{{ '{{' }}.Tag}}" | grep exail-backend | head -1
   register: backend_image_tag
   changed_when: false
+  become: true
+  become_user: "{{ podman_service_user }}"
 
 - name: "Récupérer le tag du frontend chargé"
   ansible.builtin.shell: podman images --format "{{ '{{' }}.Repository}}:{{ '{{' }}.Tag}}" | grep exail-frontend | head -1
   register: frontend_image_tag
   changed_when: false
-
+  become: true
+  become_user: "{{ podman_service_user }}"
 
 - name: "Lancement du Backend C++"
   ansible.builtin.shell: |
-    sudo podman rm -f exail-backend 2>/dev/null || true
     podman rm -f exail-backend 2>/dev/null || true
     podman run -d \
       --name exail-backend \
@@ -55,10 +62,11 @@
       {{ backend_image_tag.stdout }}
   register: backend_run
   changed_when: true
+  become: true
+  become_user: "{{ podman_service_user }}"
 
 - name: "Lancement du Frontend Vue.js"
   ansible.builtin.shell: |
-    sudo podman rm -f exail-frontend 2>/dev/null || true
     podman rm -f exail-frontend 2>/dev/null || true
     podman run -d \
       --name exail-frontend \
@@ -66,11 +74,14 @@
       -p {{ ufw_frontend_port }}:{{ container_frontend_port }} \
       {{ frontend_image_tag.stdout }}
   changed_when: true
+  become: true
+  become_user: "{{ podman_service_user }}"
 
 - name: "Nettoyage | Suppression archives .tar de /tmp"
   ansible.builtin.file:
-    path: "/tmp/{{ item }}"
+    path: "{{ podman_transfer_dir }}/{{ item }}"
     state: absent
   loop:
     - exail-backend.tar
     - exail-frontend.tar
+  become: true
