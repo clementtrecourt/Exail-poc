@@ -117,42 +117,36 @@ pipeline {
                     mkdir -p ansible/roles/podman-deploy/files/
                     mv exail-*.tar ansible/roles/podman-deploy/files/
                 """
-                sshagent(credentials: ['jenkins-ssh-key']) {
-                    sh """
-                        export ANSIBLE_CONFIG=ansible.cfg
-                        ansible-playbook                          \
-                            -i ansible/inventory/production.ini   \
-                            ansible/deploy-app.yml                \
-                            --extra-vars "build_number=${BUILD_NUMBER}" \
-                            -v
-                    """
-                }
+                ansiblePlaybook(
+                    inventory: 'ansible/inventory/production.ini',
+                    playbook: 'ansible/deploy-app.yml',
+                    extraVars: "build_number=${BUILD_NUMBER}"
+                )
             }
         }
 
         stage('Health Check') {
             steps {
-                sshagent(credentials: ['jenkins-ssh-key']) {
-                    sh '''
-                        # Health check Frontend : on cible chaque hôte du groupe production
-                        # Le module uri s'exécute DEPUIS la VM cible (connection: local implicite via delegate)
-                        # On utilise delegate_to + connection locale pour vérifier le port depuis la machine elle-même
-                        ansible production,edge                       \
-                            -i ansible/inventory/production.ini       \
-                            -m uri                                     \
-                            -a "url=http://{{ ansible_host }}:8080/health status_code=200" \
-                            --connection=ssh
+                sh '''
 
-                        # Health check Backend : exécution du binaire dans le conteneur
-                        ansible production,edge                       \
-                            -i ansible/inventory/production.ini       \
-                            -m command                                 \
-                            -a "podman exec exail-backend /app/exail_backend --health-check" \
-                            --become                                   \
-                            --become-user=exail_svc
-                    '''
-                }
+                    ansible production,edge                       \
+                        -i ansible/inventory/production.ini       \
+                        -m uri                                     \
+                        -a "url=http://{{ ansible_host }}:8080/health status_code=200" \
+                        --connection=ssh
+
+
+                    ansible production,edge                       \
+                        -i ansible/inventory/production.ini       \
+                        -m command                                 \
+                        -a "podman exec exail-backend /app/exail_backend --health-check" \
+                        --become                                   \
+                        --become-user=exail_svc
+                '''
             }
+        }
+
+
         }
     }
 
