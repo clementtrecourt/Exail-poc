@@ -1,0 +1,58 @@
+---
+jenkins:
+  systemMessage: "🛡️ Exail Edge V2 — Jenkins CI/CD | DevSecOps Pipeline"
+  numExecutors: 2
+  scmCheckoutRetryCount: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-exail2026}"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: "jenkins-ssh-key"
+              description: "Clé SSH Jenkins → VMs cibles (générée au vagrant up)"
+              username: "vagrant"
+              privateKeySource:
+                directEntry:
+                  # Clé injectée dynamiquement par le script de provisioning Vagrant
+                  # Voir: infra/vagrant/Vagrantfile (section vm-jenkins provision)
+                  privateKey: "${JENKINS_SSH_PRIVATE_KEY}"
+
+jobs:
+  - script: >
+      pipelineJob('exail-v2-pipeline') {
+        description('Pipeline DevSecOps Exail Edge V2 — Build → SBOM → Scan → Deploy')
+        keepDependencies(false)
+        definition {
+          cps {
+            script(readFileFromWorkspace('/home/jenkins-jobs/Jenkinsfile'))
+            sandbox(true)
+          }
+        }
+        triggers {
+          pollSCM('')
+        }
+        logRotator {
+          numToKeep(10)
+          artifactNumToKeep(5)
+        }
+      }
+
+unclassified:
+  location:
+    url: "http://10.0.0.10:8080/"
+    adminAddress: "admin@exail.local"
+  gitHubPluginConfig:
+    hookUrl: "http://10.0.0.10:8080/github-webhook/"

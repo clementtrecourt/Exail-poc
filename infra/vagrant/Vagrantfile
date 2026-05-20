@@ -1,53 +1,59 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
 
-    config.vm.define "vm-jenkins" do |jenkins|
+  # ============================================================
+  # vm-jenkins — Orchestrateur CI/CD
+  # ============================================================
+  config.vm.define "vm-jenkins" do |jenkins|
     jenkins.vm.hostname = "vm-jenkins"
     jenkins.vm.network "private_network", ip: "10.0.0.10",
       libvirt__network_name: "exail-v2-net"
- 
+
     jenkins.vm.provider :libvirt do |lv|
       lv.memory = 2048
       lv.cpus   = 2
     end
+
+    # Copie du Jenkinsfile et du JCasC dans la VM au provisioning
+    jenkins.vm.provision "file",
+      source: "../../Jenkinsfile",
+      destination: "/tmp/Jenkinsfile"
+
+    jenkins.vm.provision "file",
+      source: "jenkins-casc.yml",
+      destination: "/tmp/jenkins-casc.yml"
+
     jenkins.vm.provision "shell", inline: <<-SHELL
       set -e
-      echo "=== [1/7] Mise à jour système ==="
+
+      echo "=== [1/8] Mise à jour système ==="
       rm -rf /var/lib/apt/lists/*
-      sudo sed -i 's|https://mirrors.edge.kernel.org/ubuntu|http://fr.archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-      apt-get update
- 
-      echo "=== [2/7] Installation Java 17 (requis Jenkins) ==="
+      sed -i 's|https://mirrors.edge.kernel.org/ubuntu|http://fr.archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+      apt-get update -qq
+
+      echo "=== [2/8] Installation dépendances ==="
       apt-get install -y --no-install-recommends \
-        openjdk-21-jdk \
-        curl \
-        gnupg2 \
-        ca-certificates \
-        git \
-        make \
-        cmake \
-        g++ \
-        fuse-overlayfs \
-        dbus-x11 \
-        nodejs \
-        uidmap \
-        npm
- 
-     echo "=== [3/7] Installation Jenkins et ses plugins ==="
+        openjdk-21-jdk curl gnupg2 ca-certificates git make cmake g++ \
+        fuse-overlayfs dbus-x11 nodejs uidmap npm acl ansible python3-pip
 
-     curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key | sudo tee \
+      echo "=== [3/8] Installation Jenkins ==="
+      curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key | tee \
         /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-     echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-        https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+      echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+        https://pkg.jenkins.io/debian-stable binary/ | tee \
         /etc/apt/sources.list.d/jenkins.list > /dev/null
-     apt-get update -y -qq && apt-get install -y jenkins
-     curl -fsSL https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.13.0/jenkins-plugin-manager-2.13.0.jar -o /opt/jenkins-plugin-manager.jar
-     java -jar /opt/jenkins-plugin-manager.jar --plugins ssh-agent workflow-aggregator git --war /usr/share/java/jenkins.war || true
-      echo "=== [4/7] Installation Podman ==="
+      apt-get update -qq && apt-get install -y jenkins
 
+      echo "=== [4/8] Installation plugins Jenkins ==="
+      curl -fsSL https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.13.0/jenkins-plugin-manager-2.13.0.jar \
+        -o /opt/jenkins-plugin-manager.jar
+      java -jar /opt/jenkins-plugin-manager.jar \
+        --plugins ssh-agent workflow-aggregator git configuration-as-code job-dsl \
+        --war /usr/share/java/jenkins.war || true
+
+      echo "=== [5/8] Installation Podman ==="
       echo "jenkins:100000:65536" > /etc/subuid
       echo "jenkins:100000:65536" > /etc/subgid
-      
       mkdir -p /var/lib/jenkins/.config/containers
       cat <<EOF > /var/lib/jenkins/.config/containers/storage.conf
 [storage]
@@ -56,82 +62,177 @@ driver = "overlay"
 mount_program = "/usr/bin/fuse-overlayfs"
 EOF
       chown -R jenkins:jenkins /var/lib/jenkins/.config
-
       loginctl enable-linger jenkins || true
-
       apt-get install -y --no-install-recommends podman
-
       usermod -aG sudo jenkins || true
 
-      echo "=== [5/7] Configuration Git Host Verification ==="
-
+      echo "=== [6/8] Génération clé SSH Jenkins → VMs cibles ==="
       mkdir -p /var/lib/jenkins/.ssh
 
-      echo "Host *" > /var/lib/jenkins/.ssh/config
+      # CORRECTION : Donner les droits à jenkins AVANT la génération
+      chown jenkins:jenkins /var/lib/jenkins/.ssh
 
-      echo "    StrictHostKeyChecking no" >> /var/lib/jenkins/.ssh/config
+      # Génération clé Ed25519 déterministe au nom du projet
+      sudo -u jenkins ssh-keygen -t ed25519 \
+        -C "jenkins-deploy@exail-v2" \
+        -f /var/lib/jenkins/.ssh/id_ed25519 \
+        -N "" -q
 
+      chmod 700 /var/lib/jenkins/.ssh
+      chmod 600 /var/lib/jenkins/.ssh/id_ed25519
       chown -R jenkins:jenkins /var/lib/jenkins/.ssh
-      
-      echo "=== [6/7] Installation Ansible ==="
-      apt-get install -y --no-install-recommends \
-        ansible \
-        python3-pip
+
+      # Exporter la clé publique dans /tmp pour récupération par les autres VMs
+      cp /var/lib/jenkins/.ssh/id_ed25519.pub /tmp/jenkins_deploy.pub
+      chmod 644 /tmp/jenkins_deploy.pub
+
+      # Config SSH : pas de vérification host (réseau privé fermé)
+      cat <<EOF > /var/lib/jenkins/.ssh/config
+Host *
+    StrictHostKeyChecking no
+    IdentityFile /var/lib/jenkins/.ssh/id_ed25519
+EOF
+      chown jenkins:jenkins /var/lib/jenkins/.ssh/config
+
+      echo "=== [7/8] Configuration Ansible ==="
       pip3 install --quiet ansible-lint
-      sudo -u jenkins ansible-galaxy collection install ansible.posix community.general containers.podman
+      sudo -u jenkins ansible-galaxy collection install \
+        ansible.posix community.general containers.podman
 
-      echo "=== [6.5/7] Installation Syft (SBOM) ==="
-      curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      echo "=== [7.5/8] Installation Syft (SBOM) ==="
+      curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+        | sh -s -- -b /usr/local/bin
 
-      echo "=== [7/7] Démarrage Jenkins ==="
+      echo "=== [8/8] Configuration JCasC + démarrage Jenkins ==="
+      # Dossier JCasC
+      mkdir -p /var/lib/jenkins/casc_configs
+      cp /tmp/jenkins-casc.yml /var/lib/jenkins/casc_configs/jenkins.yml
+
+      # Copie du Jenkinsfile dans un emplacement accessible par le job
+      mkdir -p /home/jenkins-jobs
+      cp /tmp/Jenkinsfile /home/jenkins-jobs/Jenkinsfile
+      chown -R jenkins:jenkins /home/jenkins-jobs
+
+      # Clé privée SSH → variable d'env pour JCasC
+      JENKINS_SSH_PRIVATE_KEY=$(cat /var/lib/jenkins/.ssh/id_ed25519)
+
+      # Variables d'environnement Jenkins
+      mkdir -p /etc/systemd/system/jenkins.service.d
+      cat <<EOF > /etc/systemd/system/jenkins.service.d/override.conf
+[Service]
+Environment="CASC_JENKINS_CONFIG=/var/lib/jenkins/casc_configs"
+Environment="JENKINS_ADMIN_PASSWORD=${JENKINS_PWD}"
+Environment="JENKINS_SSH_PRIVATE_KEY=${JENKINS_SSH_PRIVATE_KEY}"
+EOF
+
+      chown -R jenkins:jenkins /var/lib/jenkins/casc_configs
+      systemctl daemon-reload
       systemctl enable jenkins
       systemctl start jenkins
- 
+
+      echo "Attente de la génération du mot de passe initial Jenkins..."
+      while [ ! -f /var/lib/jenkins/secrets/initialAdminPassword ]; do
+        sleep 2
+      done
+
+      JENKINS_PWD=$(cat /var/lib/jenkins/secrets/initialAdminPassword)
+
       echo ""
       echo "============================================"
       echo "✅ Jenkins prêt sur http://10.0.0.10:8080"
-      echo "Mot de passe initial :"
-      echo "$(cat /var/lib/jenkins/secrets/initialAdminPassword 2>/dev/null || echo 'pas encore généré, attendre 30s')"
+      echo "   Login        : admin"
+      echo "   Mot de passe : ${JENKINS_PWD}"
+      echo "   Job          : exail-v2-pipeline (prêt à lancer)"
       echo "============================================"
+      echo ""
+      echo "⚠️  Clé publique Jenkins (à injecter dans les VMs cibles) :"
+      cat /tmp/jenkins_deploy.pub
     SHELL
   end
 
-
+  # ============================================================
+  # vm-prod — Cible production (Frontend Vue.js)
+  # ============================================================
   config.vm.define "vm-prod" do |prod|
     prod.vm.hostname = "vm-prod-01"
-    prod.vm.network "private_network", ip: "10.0.0.11", libvirt__network_name: "exail-v2-net"
+    prod.vm.network "private_network", ip: "10.0.0.11",
+      libvirt__network_name: "exail-v2-net"
 
     prod.vm.provider :libvirt do |lv|
       lv.memory = 1024
-      lv.cpus = 1
+      lv.cpus   = 1
     end
-    config.vm.provision "shell", inline: <<-SHELL
-  mkdir -p /home/vagrant/.ssh
-  # Clé publique de Jenkins — à mettre à jour si tu regénères la clé
-  echo "ssh-ed25519 AAAA...TA_CLE_PUBLIQUE_JENKINS... jenkins-deploy" \
-    >> /home/vagrant/.ssh/authorized_keys
-  chmod 700 /home/vagrant/.ssh
-  chmod 600 /home/vagrant/.ssh/authorized_keys
-  chown -R vagrant:vagrant /home/vagrant/.ssh
-SHELL
+
+    prod.vm.provision "shell", inline: <<-SHELL
+      set -e
+      # Attendre que vm-jenkins ait généré sa clé et la partager via NFS/fichier n'est pas possible
+      # On accepte la clé publique via shared folder ou on la copie depuis l'hôte
+      # Solution: on copie depuis /tmp/jenkins_deploy.pub si montage partagé, sinon placeholder
+      mkdir -p /home/vagrant/.ssh
+      chmod 700 /home/vagrant/.ssh
+      touch /home/vagrant/.ssh/authorized_keys
+      chmod 600 /home/vagrant/.ssh/authorized_keys
+      chown -R vagrant:vagrant /home/vagrant/.ssh
+
+      echo "# Clé Jenkins injectée par inject-jenkins-key.sh" \
+        >> /home/vagrant/.ssh/authorized_keys
+
+      # Package acl requis pour Ansible become_user
+      apt-get update -qq
+      apt-get install -y --no-install-recommends acl
+    SHELL
   end
 
+  # ============================================================
+  # vm-drone — Cible edge (Backend C++)
+  # ============================================================
   config.vm.define "vm-drone" do |drone|
     drone.vm.hostname = "vm-edge-drone-01"
-    drone.vm.network "private_network", ip: "10.0.0.12", libvirt__network_name: "exail-v2-net"
-    
+    drone.vm.network "private_network", ip: "10.0.0.12",
+      libvirt__network_name: "exail-v2-net"
+
     drone.vm.provider :libvirt do |lv|
       lv.memory = 1024
-      lv.cpus = 1
+      lv.cpus   = 1
     end
+
+    drone.vm.provision "shell", inline: <<-SHELL
+      set -e
+      mkdir -p /home/vagrant/.ssh
+      chmod 700 /home/vagrant/.ssh
+      touch /home/vagrant/.ssh/authorized_keys
+      chmod 600 /home/vagrant/.ssh/authorized_keys
+      chown -R vagrant:vagrant /home/vagrant/.ssh
+
+      apt-get update -qq
+      apt-get install -y --no-install-recommends acl
+    SHELL
   end
+
+  # ============================================================
+  # vm-monitoring — Observabilité (Grafana, Prometheus, Loki)
+  # ============================================================
   config.vm.define "vm-monitoring" do |mon|
     mon.vm.hostname = "vm-monitoring"
-    mon.vm.network "private_network", ip: "10.0.0.13", libvirt__network_name: "exail-v2-net"
-    
+    mon.vm.network "private_network", ip: "10.0.0.13",
+      libvirt__network_name: "exail-v2-net"
+
     mon.vm.provider :libvirt do |lv|
       lv.memory = 1024
-      lv.cpus = 1
+      lv.cpus   = 1
     end
+
+    mon.vm.provision "shell", inline: <<-SHELL
+      set -e
+      mkdir -p /home/vagrant/.ssh
+      chmod 700 /home/vagrant/.ssh
+      touch /home/vagrant/.ssh/authorized_keys
+      chmod 600 /home/vagrant/.ssh/authorized_keys
+      chown -R vagrant:vagrant /home/vagrant/.ssh
+
+      apt-get update -qq
+      apt-get install -y --no-install-recommends acl
+    SHELL
   end
+
 end
