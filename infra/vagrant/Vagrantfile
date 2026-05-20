@@ -81,8 +81,8 @@ EOF
       chmod 700 /var/lib/jenkins/.ssh
       chmod 600 /var/lib/jenkins/.ssh/id_ed25519
       chown -R jenkins:jenkins /var/lib/jenkins/.ssh
-
-      # Exporter la clé publique dans /tmp pour récupération par les autres VMs
+      cp /var/lib/jenkins/.ssh/id_ed25519.pub /vagrant/jenkins_deploy.pub
+      chmod 644 /vagrant/jenkins_deploy.pub
       cp /var/lib/jenkins/.ssh/id_ed25519.pub /tmp/jenkins_deploy.pub
       chmod 644 /tmp/jenkins_deploy.pub
 
@@ -172,6 +172,11 @@ EOF
       chmod 700 /home/vagrant/.ssh
       touch /home/vagrant/.ssh/authorized_keys
       chmod 600 /home/vagrant/.ssh/authorized_keys
+      if [ -f /vagrant/jenkins_deploy.pub ]; then
+        cat /vagrant/jenkins_deploy.pub >> /home/vagrant/.ssh/authorized_keys
+      else
+        echo "⚠️ ATTENTION: La clé de Jenkins n'a pas été trouvée dans /vagrant"
+      fi
       chown -R vagrant:vagrant /home/vagrant/.ssh
 
       echo "# Clé Jenkins injectée par inject-jenkins-key.sh" \
@@ -202,6 +207,11 @@ EOF
       chmod 700 /home/vagrant/.ssh
       touch /home/vagrant/.ssh/authorized_keys
       chmod 600 /home/vagrant/.ssh/authorized_keys
+      if [ -f /vagrant/jenkins_deploy.pub ]; then
+        cat /vagrant/jenkins_deploy.pub >> /home/vagrant/.ssh/authorized_keys
+      else
+        echo "⚠️ ATTENTION: La clé de Jenkins n'a pas été trouvée dans /vagrant"
+      fi
       chown -R vagrant:vagrant /home/vagrant/.ssh
 
       apt-get update -qq
@@ -228,6 +238,11 @@ EOF
       chmod 700 /home/vagrant/.ssh
       touch /home/vagrant/.ssh/authorized_keys
       chmod 600 /home/vagrant/.ssh/authorized_keys
+      if [ -f /vagrant/jenkins_deploy.pub ]; then
+        cat /vagrant/jenkins_deploy.pub >> /home/vagrant/.ssh/authorized_keys
+      else
+        echo "⚠️ ATTENTION: La clé de Jenkins n'a pas été trouvée dans /vagrant"
+      fi
       chown -R vagrant:vagrant /home/vagrant/.ssh
 
       apt-get update -qq
