@@ -7,11 +7,11 @@
     state: present
     reload: true
   loop:
-    - { key: "net.ipv4.conf.all.accept_redirects",  value: "0" }
-    - { key: "net.ipv4.conf.all.send_redirects",    value: "0" }
-    - { key: "net.ipv4.tcp_syncookies",             value: "1" }
-    - { key: "kernel.dmesg_restrict",               value: "1" }
-    - { key: "kernel.randomize_va_space",           value: "2" } 
+    - { key: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.all.send_redirects", value: "0" }
+    - { key: "net.ipv4.tcp_syncookies", value: "1" }
+    - { key: "kernel.dmesg_restrict", value: "1" }
+    - { key: "kernel.randomize_va_space", value: "2" }
 
 - name: "ANSSI | SSH | Désactivation login root"
   ansible.builtin.lineinfile:
@@ -26,6 +26,14 @@
     path: /etc/ssh/sshd_config
     regexp: "^#?PasswordAuthentication"
     line: "PasswordAuthentication no"
+    state: present
+  notify: restart sshd
+
+- name: "ANSSI | SSH | Activation bannière légale"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?Banner"
+    line: "Banner /etc/issue.net"
     state: present
   notify: restart sshd
 
@@ -66,4 +74,5 @@
   ansible.builtin.copy:
     dest: /etc/issue.net
     content: "{{ ssh_banner_text }}"
-    mode: '0644'
+    mode: "0644"
+  notify: restart sshd
