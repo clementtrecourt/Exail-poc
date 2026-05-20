@@ -11,6 +11,8 @@ pipeline {
             parallel {
                 stage('Backend — C++ / CMake') {
                     steps {
+                        // La compilation C++/CMake est déléguée au Dockerfile.backend (multi-stage).
+                        // Ce stage nettoie uniquement les artefacts locaux pour forcer un build propre.
                         sh 'rm -rf backend/build'
                     }
                 }
@@ -92,13 +94,12 @@ pipeline {
                     fi
 
                     echo "=== Scan Backend ==="
-                    # exit-code 1 strict sur CRITICAL unfixed (selon la Todo)
                     ./trivy image --exit-code 1 --input exail-backend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
                     echo "=== Scan Frontend ==="
                     ./trivy image --exit-code 1 --input exail-frontend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
-                    # Export JSON (Toujours utile pour les traces)
+                    # Export JSON pour traçabilité et audit
                     ./trivy image --input exail-backend.tar --format json -o trivy-backend.json
                     ./trivy image --input exail-frontend.tar --format json -o trivy-frontend.json
                 '''
@@ -130,23 +131,29 @@ pipeline {
         }
 
         stage('Health Check') {
-                    steps {
-                        sshagent(credentials: ['jenkins-ssh-key']) {
-                            sh '''
-                                # On cible uniquement les groupes production et edge (pas le monitoring)
-                                ansible 'production,edge'                    \
-                                    -i ansible/inventory/production.ini      \
-                                    -m uri                                    \
-                                    -a "url=http://localhost:8080/health"
+            steps {
+                sshagent(credentials: ['jenkins-ssh-key']) {
+                    sh '''
+                        # Health check Frontend : on cible chaque hôte du groupe production
+                        # Le module uri s'exécute DEPUIS la VM cible (connection: local implicite via delegate)
+                        # On utilise delegate_to + connection locale pour vérifier le port depuis la machine elle-même
+                        ansible production,edge                       \
+                            -i ansible/inventory/production.ini       \
+                            -m uri                                     \
+                            -a "url=http://{{ ansible_host }}:8080/health status_code=200" \
+                            --connection=ssh
 
-                                ansible 'production,edge'                    \
-                                    -i ansible/inventory/production.ini      \
-                                    -m command                               \
-                                    -a "podman exec exail-backend /app/exail_backend --health-check"
-                            '''
-                        }
-                    }
+                        # Health check Backend : exécution du binaire dans le conteneur
+                        ansible production,edge                       \
+                            -i ansible/inventory/production.ini       \
+                            -m command                                 \
+                            -a "podman exec exail-backend /app/exail_backend --health-check" \
+                            --become                                   \
+                            --become-user=exail_svc
+                    '''
                 }
+            }
+        }
     }
 
     post {
