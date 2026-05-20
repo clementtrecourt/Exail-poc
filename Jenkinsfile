@@ -112,39 +112,41 @@ pipeline {
         }
 
         stage('Deploy — Ansible') {
-            steps {
-                sh """
-                    mkdir -p ansible/roles/podman-deploy/files/
-                    mv exail-*.tar ansible/roles/podman-deploy/files/
-                """
-                ansiblePlaybook(
-                    inventory: 'ansible/inventory/production.ini',
-                    playbook: 'ansible/deploy-app.yml',
-                    extraVars: "build_number=${BUILD_NUMBER}"
-                )
-            }
-        }
+                    steps {
+                        sh """
+                            mkdir -p ansible/roles/podman-deploy/files/
+                            mv exail-*.tar ansible/roles/podman-deploy/files/
+                        """
+                        // On utilise "sh" pour appeler Ansible nativement
+                        sh """
+                            export ANSIBLE_CONFIG=ansible.cfg
+                            ansible-playbook                          \
+                                -i ansible/inventory/production.ini   \
+                                ansible/deploy-app.yml                \
+                                --extra-vars "build_number=${BUILD_NUMBER}" \
+                                -v
+                        """
+                    }
+                }
 
-        stage('Health Check') {
-            steps {
-                sh '''
+                stage('Health Check') {
+                    steps {
+                        sh '''
+                            ansible production,edge                       \
+                                -i ansible/inventory/production.ini       \
+                                -m uri                                     \
+                                -a "url=http://{{ ansible_host }}:8080/health status_code=200" \
+                                --connection=ssh
 
-                    ansible production,edge                       \
-                        -i ansible/inventory/production.ini       \
-                        -m uri                                     \
-                        -a "url=http://{{ ansible_host }}:8080/health status_code=200" \
-                        --connection=ssh
-
-
-                    ansible production,edge                       \
-                        -i ansible/inventory/production.ini       \
-                        -m command                                 \
-                        -a "podman exec exail-backend /app/exail_backend --health-check" \
-                        --become                                   \
-                        --become-user=exail_svc
-                '''
-            }
-        }
+                            ansible production,edge                       \
+                                -i ansible/inventory/production.ini       \
+                                -m command                                 \
+                                -a "podman exec exail-backend /app/exail_backend --health-check" \
+                                --become                                   \
+                                --become-user=exail_svc
+                        '''
+                    }
+                }
     }
 
     post {
