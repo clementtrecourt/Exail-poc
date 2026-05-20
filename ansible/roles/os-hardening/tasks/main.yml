@@ -12,7 +12,11 @@
     - { key: "net.ipv4.tcp_syncookies", value: "1" }
     - { key: "kernel.dmesg_restrict", value: "1" }
     - { key: "kernel.randomize_va_space", value: "2" }
-
+- name: "ANSSI | ACL | Installation (requis pour become_user non-root)"
+  ansible.builtin.apt:
+    name: acl
+    state: present
+    update_cache: true
 - name: "ANSSI | SSH | Désactivation login root"
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
