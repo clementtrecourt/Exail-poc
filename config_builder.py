@@ -318,7 +318,7 @@ with tab1:
             unsafe_allow_html=True,
         )
         prod_ip = st.text_input(
-            "vm-prod-01 · Frontend Vue.js", value="192.168.121.103", key="prod_ip"
+            "vm-prod-01 · Frontend Vue.js", value="10.0.0.11", key="prod_ip"
         )
         if prod_ip and not is_valid_ip(prod_ip):
             st.error("IP invalide")
@@ -328,7 +328,7 @@ with tab1:
             '<span class="host-badge badge-edge">edge</span>', unsafe_allow_html=True
         )
         drone_ip = st.text_input(
-            "vm-edge-drone-01 · Backend C++", value="192.168.121.2", key="drone_ip"
+            "vm-edge-drone-01 · Backend C++", value="10.0.0.12", key="drone_ip"
         )
         if drone_ip and not is_valid_ip(drone_ip):
             st.error("IP invalide")
@@ -340,7 +340,7 @@ with tab1:
         )
         monitoring_ip = st.text_input(
             "vm-monitoring · Grafana/Loki/Prom",
-            value="192.168.121.200",
+            value="10.0.0.13",
             key="monitoring_ip",
         )
         if monitoring_ip and not is_valid_ip(monitoring_ip):
