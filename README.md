@@ -314,7 +314,12 @@ pip install streamlit pyyaml pandas
 ### Démarrage de l'infrastructure
 
 ```bash
+<<<<<<< HEAD
 git clone <repo-url> exail-v2
+=======
+# Cloner le dépôt
+git clone https://github.com/clementtrecourt/Exail-poc.git exail-v2
+>>>>>>> cd66b7a17976d541e94da3b930019e25908ac0c7
 cd exail-v2/infra/vagrant
 
 # Démarrer toutes les VMs (~5 min)
