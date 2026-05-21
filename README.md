@@ -127,7 +127,7 @@ flowchart TD
         G2 --> H
 
         H[Stage: Health Check]
-        H --> H1["ansible uri → GET /health :8080\nansible command → --health-check backend"]
+        H --> H1["ansible uri → GET /health ansible_host:8080\nansible command → --health-check backend"]
         H1 -->|✅| SUCCESS([✅ Build validé])
         H1 -->|❌| FAIL2([Pipeline échoué])
     end
@@ -168,7 +168,7 @@ Trois rôles sont appliqués dans l'ordre :
 2. `podman-deploy` — déploiement des conteneurs air-gapped
 3. `observability` — stack monitoring (agents sur prod/drone, serveur sur monitoring)
 
-Le déploiement utilise `sshagent` avec la credential Jenkins `jenkins-ssh-key`.
+Le déploiement utilise `sshagent` avec la credential Jenkins `jenkins-ssh-key`. Les conteneurs sont lancés sous le compte de service **`exail_svc`** (`become_user: exail_svc`) — jamais en root.
 
 ---
 
@@ -233,7 +233,8 @@ nginx:stable-alpine (runtime)
 
 - `PermitRootLogin no`
 - `PasswordAuthentication no` — clé uniquement
-- Bannière légale `/etc/issue.net` : avertissement SYSTÈME RESTREINT EXAIL
+- `Banner /etc/issue.net` — bannière légale affichée à chaque connexion SSH
+- Contenu bannière : avertissement SYSTÈME RESTREINT EXAIL
 
 #### Pare-feu UFW
 
@@ -244,6 +245,7 @@ nginx:stable-alpine (runtime)
 | 9090 | TCP | Edge | Backend C++ |
 | 9100 | TCP | Prod/Edge | Node Exporter |
 | 8081 | TCP | Prod/Edge | cAdvisor |
+| 9882 | TCP | Prod/Edge | podman-exporter (si activé) |
 | 3000 | TCP | Monitoring | Grafana |
 | 9090 | TCP | Monitoring | Prometheus |
 | 3100 | TCP | Monitoring | Loki |
@@ -252,7 +254,9 @@ Politique par défaut : **DENY ALL inbound**.
 
 #### Compte de service Podman
 
-Les conteneurs sont lancés sous le compte `exail_svc` (shell `/sbin/nologin`, pas de login interactif). Rootless Podman : aucun démon root requis.
+Les conteneurs sont lancés sous le compte **`exail_svc`** (shell `/sbin/nologin`). Le rôle `podman-deploy` utilise `become_user: exail_svc` sur toutes les tasks de chargement et d'exécution des conteneurs — aucun conteneur ne tourne en root.
+
+> **Note** : le package `acl` doit être installé sur les VMs cibles pour que `become_user` vers un utilisateur non-privilégié fonctionne (`setfacl` requis par Ansible). Il est installé en tête du rôle `os-hardening`.
 
 ---
 
@@ -274,16 +278,17 @@ vm-edge-01  ──► promtail (journal) ──┴──► Loki :3100 (vm-monit
 
 ### Composants
 
-| Composant | Rôle | Port |
-|---|---|---|
-| **Prometheus** | Scrape métriques (15s interval) | 9090 |
-| **Grafana** | Dashboards — source Prometheus + Loki | 3000 |
-| **Loki** | Agrégation logs | 3100 |
-| **Node Exporter** | Métriques système OS | 9100 |
-| **cAdvisor** | Métriques conteneurs Podman | 8081 |
-| **Promtail** | Collecte `systemd-journal` → Loki | — |
+| Composant | Rôle | Port | Conditionnel |
+|---|---|---|---|
+| **Prometheus** | Scrape métriques (15s interval) | 9090 | Non |
+| **Grafana** | Dashboards — source Prometheus + Loki | 3000 | Non |
+| **Loki** | Agrégation logs | 3100 | Non |
+| **Node Exporter** | Métriques système OS | 9100 | Non |
+| **cAdvisor** | Métriques conteneurs Podman | 8081 | `enable_cadvisor` |
+| **podman-exporter** | Métriques Podman API → Prometheus | 9882 | `enable_podman_exporter` |
+| **Promtail** | Collecte `systemd-journal` → Loki | — | Non |
 
-Promtail est configuré pour relabeler `__journal__systemd_unit` → `unit`, ce qui permet le filtrage par service dans Grafana/Loki.
+Les composants marqués **Conditionnel** sont pilotés par des variables dans `group_vars/all.yml`, modifiables via le Config Manager Streamlit. Mettre `enable_cadvisor: false` désactive la task Ansible **et** la règle UFW correspondante.
 
 ---
 
@@ -309,38 +314,43 @@ pip install streamlit pyyaml pandas
 ### Démarrage de l'infrastructure
 
 ```bash
-# Cloner le dépôt
 git clone <repo-url> exail-v2
 cd exail-v2/infra/vagrant
 
-# Démarrer toutes les VMs
+# Démarrer toutes les VMs (~5 min)
 vagrant up
 
 # Vérifier l'état
 vagrant status
 ```
 
-> ⚠️ Le provisionnement de `vm-jenkins` installe Jenkins, ses plugins, Podman, Ansible, Syft et configure les namespaces utilisateur pour le rootless. Prévoir ~5 min.
-
 ### Configuration Jenkins post-install
 
-1. Récupérer le mot de passe initial :
-   ```bash
-   vagrant ssh vm-jenkins -c "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
-   ```
-2. Ouvrir Jenkins sur `http://10.0.0.10:8080`
-3. Ajouter la credential SSH `jenkins-ssh-key` (type *SSH Username with private key*) avec la clé privée de Jenkins
-4. Créer un job Pipeline pointant sur ce dépôt, type *Pipeline from SCM*
-
-### Clé SSH Jenkins → VMs cibles
+Une fois `vagrant up` terminé, lancer le script de setup :
 
 ```bash
-# Sur vm-jenkins, générer une clé Ed25519
-sudo -u jenkins ssh-keygen -t ed25519 -C "jenkins-deploy" -f /var/lib/jenkins/.ssh/id_ed25519 -N ""
+bash infra/vagrant/setup-jenkins.sh
+```
 
-# Copier la clé publique dans le Vagrantfile (section vm-prod provision shell)
-# puis mettre à jour authorized_keys sur vm-drone et vm-monitoring de la même façon
-sudo -u jenkins cat /var/lib/jenkins/.ssh/id_ed25519.pub
+Ce script automatise via l'API Jenkins :
+1. Attente que Jenkins soit disponible
+2. Injection de la clé SSH `jenkins-ssh-key` comme credential
+3. Création du job Pipeline `exail-v2-pipeline` pointant sur le Jenkinsfile du repo
+4. Propagation de la clé publique Jenkins vers les VMs cibles (`vm-prod`, `vm-drone`, `vm-monitoring`)
+
+Jenkins est ensuite accessible sur **`http://10.0.0.10:8080`** — `admin / exail2026`.
+
+> La clé SSH Jenkins est générée au provisioning de `vm-jenkins` et stockée dans `/var/lib/jenkins/.ssh/id_ed25519`. Elle est regénérée à chaque `vagrant destroy && vagrant up`.
+
+### Structure des clés SSH
+
+Les clés SSH par VM sont déclarées dans `ansible/host_vars/` pour éviter tout chemin hardcodé :
+
+```
+ansible/host_vars/
+├── vm-prod.yml        # ansible_ssh_private_key_file relatif à playbook_dir
+├── vm-drone.yml
+└── vm-monitoring.yml
 ```
 
 ---
@@ -350,41 +360,34 @@ sudo -u jenkins cat /var/lib/jenkins/.ssh/id_ed25519.pub
 ### Lancer un déploiement complet
 
 ```bash
-# Via Jenkins UI : Build Now sur le job configuré
-# Ou via CLI Jenkins (si jenkins-cli.jar installé) :
-java -jar jenkins-cli.jar -s http://10.0.0.10:8080 build <job-name> -v
+# Via Jenkins UI sur http://10.0.0.10:8080
+# Job : exail-v2-pipeline → Build Now
 ```
 
 ### Déploiement Ansible manuel (hors Jenkins)
 
 ```bash
-cd exail-v2
-
-# S'assurer que les archives existent dans roles/podman-deploy/files/
-ls ansible/roles/podman-deploy/files/
-
-# Lancer uniquement le hardening
-ansible-playbook -i ansible/inventory/production.ini ansible/deploy-app.yml \
-  --tags os-hardening
-
 # Déploiement complet
 ansible-playbook -i ansible/inventory/production.ini ansible/deploy-app.yml -v
+
+# Hardening uniquement
+ansible-playbook -i ansible/inventory/production.ini ansible/deploy-app.yml \
+  --tags os-hardening
 ```
 
 ### Vérifications post-déploiement
 
 ```bash
 # Health check frontend
-curl http://10.0.0.11:8080/health
-# → OK
+curl http://10.0.0.11:8080/health    # → OK
 
 # Health check backend
-vagrant ssh vm-drone -c "podman exec exail-backend /app/exail_backend --health-check"
+vagrant ssh vm-drone -c \
+  "podman exec exail-backend /app/exail_backend --health-check"
 # → STATUS: OK
 
 # Grafana
-open http://10.0.0.13:3000
-# admin / admin (changer au premier login)
+open http://10.0.0.13:3000           # admin / admin
 ```
 
 ---
@@ -395,15 +398,12 @@ open http://10.0.0.13:3000
 
 - **Monitorer l'infrastructure** en temps réel (ping ICMP + TCP connect sur tous les ports exposés, avec auto-refresh 30s optionnel)
 - **Générer les fichiers Ansible** (`inventory/production.ini` et `group_vars/all.yml`) depuis une interface graphique avec validation des IPs/ports
-- **Visualiser un récapitulatif** de l'état de tous les hosts sous forme de tableau
+- **Piloter les toggles d'observabilité** — activer/désactiver `cAdvisor` et `podman-exporter` se répercute réellement sur les tasks Ansible via les variables `enable_cadvisor` et `enable_podman_exporter`
 
 ```bash
-# Lancer depuis la racine du projet
 streamlit run config_builder.py
 # → http://localhost:8501
 ```
-
-L'application écrit directement les fichiers générés dans `ansible/inventory/` et `ansible/group_vars/` du projet.
 
 ---
 
@@ -417,7 +417,7 @@ Le pipeline Trivy est configuré en mode **strict** :
 --severity CRITICAL --ignore-unfixed --exit-code 1
 ```
 
-Seules les CVE **CRITICAL** pour lesquelles un correctif existe bloquent le pipeline. Les CVE sans correctif disponible upstream (`--ignore-unfixed`) sont exclues du critère de blocage mais restent visibles dans les rapports JSON archivés.
+Seules les CVE **CRITICAL** pour lesquelles un correctif existe bloquent le pipeline. Les CVE sans correctif disponible upstream sont exclues du critère de blocage mais restent visibles dans les rapports JSON archivés.
 
 ### Exception documentée — CVE-2026-0861
 
@@ -431,11 +431,9 @@ Seules les CVE **CRITICAL** pour lesquelles un correctif existe bloquent le pipe
 
 **Justification d'acceptation du risque :**
 
-Cette CVE affecte une bibliothèque système de l'image de base `gcr.io/distroless/cc-debian12`. Elle a été évaluée selon les critères suivants :
-
-1. **Surface d'exposition** : l'image distroless ne contient ni shell, ni interpréteur, ni gestionnaire de paquets. Le vecteur d'exploitation nécessite une exécution de code arbitraire préalable, qui est impossible dans ce contexte.
+1. **Surface d'exposition** : l'image distroless ne contient ni shell, ni interpréteur, ni gestionnaire de paquets. Le vecteur d'exploitation nécessite une exécution de code arbitraire préalable, impossible dans ce contexte.
 2. **Isolation réseau** : les conteneurs s'exécutent dans un environnement air-gapped avec UFW `DENY ALL` par défaut ; seul le port 9090 est accessible depuis le réseau privé.
-3. **Absence de correctif** : aucun patch n'est disponible dans Debian 12 au moment de la décision. Le risque résiduel est jugé acceptable en attendant un correctif upstream.
+3. **Absence de correctif** : aucun patch disponible dans Debian 12 au moment de la décision. Le risque résiduel est jugé acceptable en attendant un correctif upstream.
 4. **Traçabilité** : la décision est enregistrée dans `.trivyignore` avec le numéro de CVE explicite. Les rapports Trivy JSON complets restent archivés dans Jenkins pour audit.
 
 **Action de suivi** : surveiller les advisories Debian/distroless et retirer l'exception dès qu'un correctif est disponible.
@@ -449,13 +447,17 @@ exail-v2/
 ├── ansible/
 │   ├── deploy-app.yml                  # Playbook principal (3 rôles)
 │   ├── inventory/
-│   │   └── production.ini              # Inventaire 4 VMs
+│   │   └── production.ini              # Inventaire 4 VMs (10.0.0.x)
 │   ├── group_vars/
-│   │   └── all.yml                     # Variables globales
+│   │   └── all.yml                     # Variables globales + toggles observabilité
+│   ├── host_vars/
+│   │   ├── vm-prod.yml                 # Clé SSH par host (chemin relatif)
+│   │   ├── vm-drone.yml
+│   │   └── vm-monitoring.yml
 │   └── roles/
-│       ├── os-hardening/               # Hardening ANSSI (sysctl, SSH, UFW, bannière)
-│       ├── podman-deploy/              # Déploiement air-gapped (load + run)
-│       └── observability/              # Stack monitoring (agents + serveur central)
+│       ├── os-hardening/               # Hardening ANSSI (sysctl, SSH, UFW, bannière, acl)
+│       ├── podman-deploy/              # Déploiement air-gapped sous exail_svc
+│       └── observability/              # Stack monitoring conditionnelle
 ├── backend/
 │   └── src/main.cpp                    # Backend C++ edge simulé
 ├── frontend/
@@ -463,7 +465,8 @@ exail-v2/
 │   └── package.json
 ├── infra/
 │   └── vagrant/
-│       └── Vagrantfile                 # 4 VMs Libvirt (jenkins, prod, drone, monitoring)
+│       ├── Vagrantfile                 # 4 VMs Libvirt (jenkins, prod, drone, monitoring)
+│       └── setup-jenkins.sh            # Post-provisioning : credential + job Jenkins via API
 ├── Dockerfile.backend                  # Multi-stage debian → distroless/nonroot
 ├── Dockerfile.frontend                 # Multi-stage node:alpine → nginx:stable-alpine
 ├── Jenkinsfile                         # Pipeline 7 stages
