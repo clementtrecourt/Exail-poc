@@ -3,3 +3,4 @@
 .exail-frontend.tar
 jenkins-data
 *.zip
+.vscode/
