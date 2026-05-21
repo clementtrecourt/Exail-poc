@@ -310,7 +310,7 @@ pip install streamlit pyyaml pandas
 
 ```bash
 # Cloner le dépôt
-git clone <repo-url> exail-v2
+git clone https://github.com/clementtrecourt/Exail-poc.git exail-v2
 cd exail-v2/infra/vagrant
 
 # Démarrer toutes les VMs
