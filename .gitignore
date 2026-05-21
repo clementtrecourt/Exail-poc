@@ -2,4 +2,4 @@
 .exail-backend.tar
 .exail-frontend.tar
 jenkins-data
-*.zip
+infra/vagrant/secrets.zip
