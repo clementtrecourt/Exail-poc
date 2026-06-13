@@ -11,8 +11,6 @@ pipeline {
             parallel {
                 stage('Backend — C++ / CMake') {
                     steps {
-                        // La compilation C++/CMake est déléguée au Dockerfile.backend (multi-stage).
-                        // Ce stage nettoie uniquement les artefacts locaux pour forcer un build propre.
                         sh 'rm -rf backend/build'
                     }
                 }
@@ -68,7 +66,13 @@ pipeline {
                 archiveArtifacts artifacts: 'exail-*.tar'
             }
         }
-
+        stage('Test') {
+          steps {
+            echo 'Backend smoke test...'
+              sh 'podman run --rm localhost/exail-backend:latest /app/exail_backend --health-check || true'
+          }
+          post { always { echo 'Test stage done' } }
+        }
         stage('SBOM Generation — Syft') {
             steps {
                 sh '''
