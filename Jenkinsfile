@@ -121,7 +121,6 @@ pipeline {
                             mkdir -p ansible/roles/podman-deploy/files/
                             mv exail-*.tar ansible/roles/podman-deploy/files/
                         """
-                        // On utilise "sh" pour appeler Ansible nativement
                         sh """
                             export ANSIBLE_CONFIG=ansible.cfg
                             ansible-playbook                          \
