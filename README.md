@@ -85,7 +85,15 @@ Toutes les VMs sont sur le réseau privé Libvirt `exail-v2-net`. La communicati
   │                                  └──────────────┘   │
   └─────────────────────────────────────────────────────┘
 ```
+## Choix architecturaux (ADR)
 
+**Jenkins** : seul CI fonctionnel sans dépendance cloud. GitLab CI = instance self-hosted
+supplémentaire. GitHub Actions = cloud-native incompatible air-gapped.
+**Podman rootless** : pas de daemon root. Compatible RHEL/Fedora courant en défense.
+**Archives .tar** : seul vecteur viable en air-gapped strict. Applicable au transfert
+physique USB vers un drone en opération.
+**Vagrant** : reproductibilité immédiate sur tout laptop Linux. Terraform pour environnements
+persistants (voir homelab).
 ---
 
 ## Pipeline CI/CD
@@ -170,6 +178,10 @@ Trois rôles sont appliqués dans l'ordre :
 
 Le déploiement utilise `sshagent` avec la credential Jenkins `jenkins-ssh-key`. Les conteneurs sont lancés sous le compte de service **`exail_svc`** (`become_user: exail_svc`) — jamais en root.
 
+## Rollback
+Chaque image est labelisée `git.commit`. Rollback via relance Jenkins sur le commit cible,
+ou manuellement : `ansible-playbook deploy-app.yml -e "image_tag=<sha>"`
+Les 5 dernières archives .tar sont conservées dans le workspace Jenkins.
 ---
 
 ## Stack applicative
