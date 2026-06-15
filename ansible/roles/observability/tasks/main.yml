@@ -127,8 +127,10 @@
 
     - name: "Démarrage Promtail"
       ansible.builtin.shell: |
+        JOURNAL_GID=$(getent group systemd-journal | cut -d: -f3)
         podman rm -f promtail 2>/dev/null || true
         podman run -d --name promtail \
+          --group-add "${JOURNAL_GID}" \
           -v /var/log/journal:/var/log/journal:ro \
           -v /run/log/journal:/run/log/journal:ro \
           -v /etc/machine-id:/etc/machine-id:ro \
