@@ -18,3 +18,5 @@ podman_service_user: exail_svc
 podman_transfer_dir: /tmp
 container_frontend_port: 8080
 container_backend_port: 9090
+enable_podman_exporter: true
+enable_cadvisor: true

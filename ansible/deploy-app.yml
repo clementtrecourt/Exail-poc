@@ -9,13 +9,11 @@
 - name: "DevSecOps Exail — Déploiement Applicatif (Air-Gapped)"
   hosts: all:!monitoring
   become: false
-  tags: [deploy]
   roles:
     - podman-deploy
 
 - name: "DevSecOps Exail — Observabilité (Stack Monitoring)"
   hosts: all
   become: true
-  tags: [observability]
   roles:
     - observability

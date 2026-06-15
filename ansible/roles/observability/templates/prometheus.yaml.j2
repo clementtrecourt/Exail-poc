@@ -13,3 +13,9 @@ scrape_configs:
       - targets:
         - "{{ hostvars['vm-prod'].ansible_host }}:8081"
         - "{{ hostvars['vm-drone'].ansible_host }}:8081"
+
+  - job_name: 'podman-exporter'
+    static_configs:
+      - targets:
+        - "{{ hostvars['vm-prod'].ansible_host }}:9882"
+        - "{{ hostvars['vm-drone'].ansible_host }}:9882"

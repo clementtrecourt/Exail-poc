@@ -462,10 +462,6 @@ exail-v2/
 │   │   └── production.ini              # Inventaire 4 VMs (10.0.0.x)
 │   ├── group_vars/
 │   │   └── all.yml                     # Variables globales + toggles observabilité
-│   ├── host_vars/
-│   │   ├── vm-prod.yml                 # Clé SSH par host (chemin relatif)
-│   │   ├── vm-drone.yml
-│   │   └── vm-monitoring.yml
 │   └── roles/
 │       ├── os-hardening/               # Hardening ANSSI (sysctl, SSH, UFW, bannière, acl)
 │       ├── podman-deploy/              # Déploiement air-gapped sous exail_svc
