@@ -20,16 +20,24 @@
         - "9090"
         - "3100"
 
-    - name: "Création dossier config"
+    - name: "Création dossiers config"
       ansible.builtin.file:
-        path: "/etc/monitoring"
+        path: "{{ item }}"
         state: directory
         mode: "0755"
+      loop:
+        - /etc/monitoring
+        - /etc/monitoring/grafana-provisioning/datasources
 
     - name: "Génération prometheus.yml"
       ansible.builtin.template:
         src: "prometheus.yaml.j2"
         dest: "/etc/monitoring/prometheus.yml"
+
+    - name: "Génération datasources Grafana"
+      ansible.builtin.template:
+        src: "grafana-datasources.yaml.j2"
+        dest: "/etc/monitoring/grafana-provisioning/datasources/datasources.yaml"
 
     - name: "Démarrage Stack Centrale"
       ansible.builtin.shell: |
@@ -44,8 +52,10 @@
           -v /etc/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro \
           docker.io/prom/prometheus:latest
         podman run -d --name grafana \
-          -p 3000:3000 \
+          --network=host \
+          -e GF_PATHS_PROVISIONING=/etc/grafana/provisioning \
           -v grafana_data:/var/lib/grafana \
+          -v /etc/monitoring/grafana-provisioning:/etc/grafana/provisioning:ro \
           docker.io/grafana/grafana:latest
       changed_when: true
 
