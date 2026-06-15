@@ -103,6 +103,10 @@ EOF
       curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
         | sh -s -- -b /usr/local/bin
 
+      echo "=== [7.6/8] Installation Trivy (scan CVE) ==="
+      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+        | sh -s -- -b /usr/local/bin
+
       echo "=== [8/8] Configuration JCasC + démarrage Jenkins ==="
       # Dossier JCasC
       mkdir -p /var/lib/jenkins/casc_configs

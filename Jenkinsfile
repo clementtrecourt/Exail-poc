@@ -93,19 +93,15 @@ pipeline {
         stage('Security Scan — Trivy') {
             steps {
                 sh '''
-                    if [ ! -f ./trivy ]; then
-                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
-                    fi
-
                     echo "=== Scan Backend ==="
-                    ./trivy image --exit-code 1 --input exail-backend.tar --severity CRITICAL --ignore-unfixed --no-progress
+                    trivy image --exit-code 1 --input exail-backend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
                     echo "=== Scan Frontend ==="
-                    ./trivy image --exit-code 1 --input exail-frontend.tar --severity CRITICAL --ignore-unfixed --no-progress
+                    trivy image --exit-code 1 --input exail-frontend.tar --severity CRITICAL --ignore-unfixed --no-progress
 
-                    # Export JSON pour traçabilité et audit
-                    ./trivy image --input exail-backend.tar --format json -o trivy-backend.json
-                    ./trivy image --input exail-frontend.tar --format json -o trivy-frontend.json
+                    echo "=== Export JSON ==="
+                    trivy image --input exail-backend.tar --format json -o trivy-backend.json
+                    trivy image --input exail-frontend.tar --format json -o trivy-frontend.json
                 '''
             }
             post {
