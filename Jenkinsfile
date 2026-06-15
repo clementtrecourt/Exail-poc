@@ -69,7 +69,7 @@ pipeline {
         stage('Test') {
           steps {
             echo 'Backend smoke test...'
-              sh "podman run --rm ${BACKEND_IMAGE} /app/exail_backend --health-check || true"
+              sh "timeout 10 podman run --rm --network=none ${BACKEND_IMAGE} /app/exail_backend --health-check || true"
           }
           post { always { echo 'Test stage done' } }
         }
